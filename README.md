@@ -43,7 +43,7 @@ Assessment Report  (Markdown + HTML)
 ---
 
 ## Architecture
-![docs](k8s_upgrade_assess_architecture_v3.svg)
+![Architecture](docs/k8s_upgrade_assess_architecture_v3.svg)
 
 ---
 
