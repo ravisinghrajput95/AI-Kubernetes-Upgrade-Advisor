@@ -1,0 +1,29 @@
+# Knowledge base (large binary files + scraped content)
+kb/faiss.index
+kb/chunks_meta.pkl
+kb/raw/
+
+# Cluster snapshots (may contain sensitive data)
+*.cluster.json
+cluster*.json
+
+# Env / secrets
+.env
+*.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+.venv/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+.DS_Store
