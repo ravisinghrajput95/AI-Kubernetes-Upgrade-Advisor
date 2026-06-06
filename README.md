@@ -58,8 +58,8 @@ Assessment Report  (Markdown + HTML)
 ## Installation
 
 ```bash
-git clone <your-repo>
-cd k8s-upgrade-assess
+git clone https://github.com/ravisinghrajput95/AI-Kubernetes-Upgrade-Advisor
+cd AI-Kubernetes-Upgrade-Advisor
 pip install -r requirements.txt
 export OPENAI_API_KEY="sk-..."
 ```
