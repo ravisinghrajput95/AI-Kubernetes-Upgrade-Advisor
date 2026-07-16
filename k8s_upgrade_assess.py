@@ -106,9 +106,15 @@ def call_openai(prompt: str, system: str, stream: bool = True) -> str:
 
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
 
+    # The endpoint above is a hardcoded https:// constant; this guard makes
+    # that invariant explicit so a future refactor can't introduce file://
+    # or http:// requests (urllib would happily follow either).
+    if not req.full_url.startswith("https://"):
+        raise ValueError(f"Refusing non-HTTPS request: {req.full_url}")
+
     collected = []
     try:
-        with urllib.request.urlopen(req, timeout=300) as resp:
+        with urllib.request.urlopen(req, timeout=300) as resp:  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
             if stream:
                 for raw_line in resp:
                     line = raw_line.decode("utf-8").strip()

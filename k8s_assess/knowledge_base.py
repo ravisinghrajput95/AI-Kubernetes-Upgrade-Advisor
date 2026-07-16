@@ -9,9 +9,8 @@ and stores/loads a FAISS index.
 from __future__ import annotations
 
 import json
-import pickle
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -23,7 +22,11 @@ from .collector import Document, RAW_DIR
 
 KB_DIR   = Path(__file__).parent.parent / "kb"
 INDEX_PATH  = KB_DIR / "faiss.index"
-META_PATH   = KB_DIR / "chunks_meta.pkl"
+# Chunk metadata is stored as JSON (data-only). It was previously
+# pickled, but unpickling executes arbitrary code if the file is ever
+# tampered with — JSON removes that risk class entirely.
+META_PATH   = KB_DIR / "chunks_meta.json"
+LEGACY_META_PATH = KB_DIR / "chunks_meta.pkl"
 
 EMBED_MODEL = "all-MiniLM-L6-v2"    # 22 MB, fast, good quality
 CHUNK_SIZE  = 600                    # chars
@@ -126,17 +129,22 @@ class KnowledgeBase:
         if save:
             KB_DIR.mkdir(parents=True, exist_ok=True)
             faiss.write_index(index, str(INDEX_PATH))
-            with open(META_PATH, "wb") as f:
-                pickle.dump(chunks, f)
+            with open(META_PATH, "w", encoding="utf-8") as f:
+                json.dump([asdict(c) for c in chunks], f)
+            # Drop any pickle metadata left behind by older versions
+            LEGACY_META_PATH.unlink(missing_ok=True)
             print(f"  ✔  Index saved ({len(chunks)} chunks, dim={dim})")
 
     def load(self) -> bool:
         """Load a pre-built index from disk. Returns True if successful."""
         if not INDEX_PATH.exists() or not META_PATH.exists():
+            if LEGACY_META_PATH.exists():
+                print("  ▸ Found legacy pickle metadata (no longer loaded "
+                      "for security reasons) — please rebuild the knowledge base.")
             return False
         self._index = faiss.read_index(str(INDEX_PATH))
-        with open(META_PATH, "rb") as f:
-            self._chunks = pickle.load(f)
+        with open(META_PATH, encoding="utf-8") as f:
+            self._chunks = [Chunk(**d) for d in json.load(f)]
         print(f"  ✔  Loaded KB: {len(self._chunks)} chunks")
         return True
 
