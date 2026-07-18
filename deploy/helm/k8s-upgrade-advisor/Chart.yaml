@@ -2,8 +2,8 @@ apiVersion: v2
 name: k8s-upgrade-advisor
 description: AI Kubernetes upgrade intelligence platform — deterministic compatibility analysis with RAG-grounded planning
 type: application
-version: 2.0.0
-appVersion: "2.0.0"
+version: 2.1.0
+appVersion: "2.1.0"
 keywords: [kubernetes, upgrade, platform-engineering]
 sources:
   - https://github.com/ravisinghrajput95/AI-Kubernetes-Upgrade-Advisor

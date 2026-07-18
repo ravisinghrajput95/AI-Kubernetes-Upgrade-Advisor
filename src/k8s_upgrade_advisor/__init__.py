@@ -6,4 +6,4 @@ compatibility) and the LLM explains, sequences, and plans around them — it is
 never the source of truth for compatibility facts.
 """
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
