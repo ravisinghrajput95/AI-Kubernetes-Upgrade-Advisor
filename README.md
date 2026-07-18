@@ -31,6 +31,8 @@ Supports **EKS · GKE · AKS · OpenShift · Rancher (RKE2/k3s) · kubeadm · ki
 
 ## Try it in 30 seconds
 
+![CLI demo](docs/images/demo.gif)
+
 ```bash
 pip install -e ".[api]"
 k8s-upgrade-advisor assess -s 1.26 -t 1.29 \
