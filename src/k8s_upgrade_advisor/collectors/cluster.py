@@ -1,0 +1,175 @@
+"""Live cluster collection via kubectl and helm.
+
+Principles:
+  - Success is judged by process return code, never by stderr content —
+    kubectl emits deprecation and throttling *warnings* on stderr while
+    succeeding.
+  - Commands run concurrently (they are independent reads) with a bounded
+    pool so large clusters don't serialize into a multi-minute collection.
+  - The collector only fills a :class:`ClusterSnapshot`; no analysis here.
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+import time
+from concurrent.futures import ThreadPoolExecutor
+
+from ..models.cluster import ClusterSnapshot, CommandResult, HelmRelease
+from ..observability import get_logger
+
+log = get_logger(__name__)
+
+# Read-only inventory commands. Keys are stable identifiers used by analyzers.
+KUBECTL_COMMANDS: dict[str, list[str]] = {
+    "version": ["version", "--output=json"],
+    "nodes": ["get", "nodes", "-o", "wide"],
+    "nodes_json": ["get", "nodes", "-o", "json"],
+    "namespaces": ["get", "ns"],
+    "api_resources": ["api-resources", "--verbs=list", "-o", "wide"],
+    "api_versions": ["api-versions"],
+    "api_services": ["get", "apiservices"],
+    "deployments": ["get", "deploy", "-A", "-o", "wide"],
+    "statefulsets": ["get", "sts", "-A", "-o", "wide"],
+    "daemonsets": ["get", "ds", "-A", "-o", "wide"],
+    "jobs": ["get", "jobs", "-A"],
+    "cronjobs": ["get", "cronjobs", "-A"],
+    "crds": ["get", "crd"],
+    "validating_webhooks": ["get", "validatingwebhookconfigurations"],
+    "mutating_webhooks": ["get", "mutatingwebhookconfigurations"],
+    "storage_classes": ["get", "sc"],
+    "csi_drivers": ["get", "csidrivers"],
+    "pvs": ["get", "pv"],
+    "pvcs": ["get", "pvc", "-A"],
+    "pdbs": ["get", "pdb", "-A"],
+    "hpas": ["get", "hpa", "-A"],
+    "priority_classes": ["get", "priorityclasses"],
+    "top_nodes": ["top", "nodes"],
+    "cluster_info": ["cluster-info"],
+    "flowschemas": ["get", "flowschemas"],
+    # Expected to fail on >=1.25 clusters; when it succeeds it is direct
+    # usage evidence for the PodSecurityPolicy removal finding.
+    "psp": ["get", "psp"],
+}
+
+# Commands whose failure means we genuinely can't assess the cluster.
+CRITICAL_COMMANDS = {
+    "version",
+    "nodes",
+    "api_resources",
+    "crds",
+    "validating_webhooks",
+    "mutating_webhooks",
+    "deployments",
+    "statefulsets",
+    "daemonsets",
+}
+
+
+def _run(argv: list[str], timeout: float = 45.0) -> CommandResult:
+    start = time.monotonic()
+    try:
+        proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+        return CommandResult(
+            args=argv,
+            stdout=proc.stdout.strip(),
+            stderr=proc.stderr.strip(),
+            returncode=proc.returncode,
+            duration_ms=int((time.monotonic() - start) * 1000),
+        )
+    except FileNotFoundError:
+        return CommandResult(args=argv, error=f"{argv[0]} not found in PATH")
+    except subprocess.TimeoutExpired:
+        return CommandResult(
+            args=argv,
+            error=f"timed out after {timeout:.0f}s",
+            duration_ms=int((time.monotonic() - start) * 1000),
+        )
+
+
+def _global_args(context: str | None, kubeconfig: str | None) -> list[str]:
+    extra: list[str] = []
+    if context:
+        extra += ["--context", context]
+    if kubeconfig:
+        extra += ["--kubeconfig", kubeconfig]
+    return extra
+
+
+def _collect_helm(context: str | None, kubeconfig: str | None) -> tuple[list[HelmRelease], bool]:
+    """Helm gives the highest-quality component version evidence (chart +
+    app version per release). Absence of helm is fine — analyzers fall back
+    to image-tag parsing."""
+    if shutil.which("helm") is None:
+        return [], False
+    argv = ["helm", "list", "-A", "-o", "json", "--max", "500"]
+    if kubeconfig:
+        argv += ["--kubeconfig", kubeconfig]
+    if context:
+        argv += ["--kube-context", context]
+    result = _run(argv, timeout=30)
+    if not result.ok:
+        log.warning("helm_list_failed", error=result.error or result.stderr[:200])
+        return [], True
+    releases: list[HelmRelease] = []
+    try:
+        for item in json.loads(result.stdout or "[]"):
+            chart = item.get("chart", "")
+            # chart is "<name>-<version>", version may itself contain dashes-free semver
+            name, _, version = chart.rpartition("-")
+            releases.append(
+                HelmRelease(
+                    name=item.get("name", ""),
+                    namespace=item.get("namespace", ""),
+                    chart=chart,
+                    chart_name=name or chart,
+                    chart_version=version,
+                    app_version=item.get("app_version", ""),
+                    status=item.get("status", ""),
+                    revision=int(item["revision"])
+                    if str(item.get("revision", "")).isdigit()
+                    else None,
+                )
+            )
+    except (json.JSONDecodeError, TypeError) as exc:
+        log.warning("helm_parse_failed", error=str(exc))
+    return releases, True
+
+
+def collect_cluster_snapshot(
+    context: str | None = None,
+    kubeconfig: str | None = None,
+    timeout: float = 45.0,
+    max_workers: int = 8,
+) -> ClusterSnapshot:
+    """Collect a full snapshot from the live cluster the kubeconfig points at."""
+    extra = _global_args(context, kubeconfig)
+    log.info("cluster_collection_started", commands=len(KUBECTL_COMMANDS), context=context)
+
+    results: dict[str, CommandResult] = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {
+            key: pool.submit(_run, ["kubectl", *extra, *args], timeout)
+            for key, args in KUBECTL_COMMANDS.items()
+        }
+        for key, future in futures.items():
+            results[key] = future.result()
+
+    helm_releases, helm_available = _collect_helm(context, kubeconfig)
+
+    snapshot = ClusterSnapshot(
+        source="live",
+        context=context,
+        kubectl=results,
+        helm_releases=helm_releases,
+        helm_available=helm_available,
+    )
+    log.info(
+        "cluster_collection_finished",
+        ok=snapshot.commands_ok,
+        total=snapshot.commands_total,
+        helm_releases=len(helm_releases),
+    )
+    return snapshot

@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>k8s-upgrade-advisor</title>
+<style>
+:root { --bg:#fff; --fg:#1a1f27; --muted:#5b6472; --card:#f6f8fa; --line:#d8dee6;
+  --ok:#1a7f37; --warn:#9a6700; --risk:#bc4c00; --block:#cf222e; --accent:#0969da; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#0d1117; --fg:#e6edf3; --muted:#8d96a0; --card:#161b22; --line:#30363d;
+    --ok:#3fb950; --warn:#d29922; --risk:#f0883e; --block:#f85149; --accent:#58a6ff; } }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--fg);
+  font:15px/1.55 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
+main { max-width:900px; margin:0 auto; padding:2rem 1rem 4rem; }
+h1 { font-size:1.4rem; margin:.2rem 0; }
+h1 .k8s { color:var(--accent); }
+.sub { color:var(--muted); margin:0 0 1.6rem; font-size:.9rem; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:10px;
+  padding:1.2rem 1.4rem; margin:1rem 0; }
+label { display:block; font-size:.8rem; color:var(--muted); text-transform:uppercase;
+  letter-spacing:.04em; margin:.8rem 0 .25rem; }
+input[type=text], textarea { width:100%; padding:.55rem .7rem; border:1px solid var(--line);
+  border-radius:6px; background:var(--bg); color:var(--fg); font:inherit; }
+textarea { font-family:ui-monospace,Menlo,monospace; font-size:.8rem; min-height:130px; }
+.row { display:flex; gap:1rem; flex-wrap:wrap; }
+.row > div { flex:1; min-width:140px; }
+button { margin-top:1rem; padding:.6rem 1.4rem; border:0; border-radius:6px;
+  background:var(--accent); color:#fff; font:inherit; font-weight:600; cursor:pointer; }
+button:disabled { opacity:.5; cursor:wait; }
+.toggle { display:flex; align-items:center; gap:.5rem; margin-top:1rem; font-size:.9rem; }
+.toggle input { accent-color:var(--accent); }
+table { border-collapse:collapse; width:100%; font-size:.9rem; }
+th, td { text-align:left; padding:.5rem .6rem; border-bottom:1px solid var(--line); }
+th { color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.03em; }
+.badge { display:inline-block; padding:.15rem .6rem; border-radius:999px; font-weight:700;
+  font-size:.75rem; color:#fff; }
+.badge.ready{background:var(--ok);} .badge.ready-with-cautions{background:var(--warn);}
+.badge.not-ready{background:var(--risk);} .badge.blocked{background:var(--block);}
+.error { color:var(--block); font-size:.9rem; margin-top:.8rem; white-space:pre-wrap; }
+a { color:var(--accent); }
+.hint { font-size:.8rem; color:var(--muted); margin:.3rem 0 0; }
+.kb { font-size:.8rem; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1><span class="k8s">⎈</span> k8s-upgrade-advisor</h1>
+  <p class="sub">Deterministic Kubernetes upgrade analysis with RAG-grounded AI planning
+    · <span id="kb" class="kb">checking knowledge base…</span></p>
+
+  <div class="card">
+    <h2 style="margin:0;font-size:1.05rem;">New assessment</h2>
+    <form id="form">
+      <div class="row">
+        <div><label for="source">Source version</label>
+          <input type="text" id="source" placeholder="1.28" required></div>
+        <div><label for="target">Target version</label>
+          <input type="text" id="target" placeholder="1.31" required></div>
+      </div>
+      <label for="file">Cluster snapshot (JSON)</label>
+      <input type="file" id="file" accept="application/json,.json">
+      <p class="hint">Create one with <code>k8s-upgrade-advisor snapshot cluster.json</code>
+        — or paste below.</p>
+      <textarea id="snapshot" placeholder='{"schema_version": 1, "kubectl": { … }}'></textarea>
+      <div class="toggle">
+        <input type="checkbox" id="dryrun" checked>
+        <label for="dryrun" style="all:unset;cursor:pointer;">
+          Dry run (deterministic analysis only, no LLM call)</label>
+      </div>
+      <button id="submit" type="submit">Assess upgrade</button>
+      <div id="error" class="error"></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2 style="margin:0 0 .6rem;font-size:1.05rem;">Assessments</h2>
+    <table id="list">
+      <thead><tr><th>When</th><th>Path</th><th>Verdict</th><th>Readiness</th>
+        <th>Findings</th><th>Report</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="hint" id="empty">No assessments yet in this server session.</p>
+  </div>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+
+async function refreshKb() {
+  try {
+    const r = await (await fetch("/readyz")).json();
+    $("kb").textContent = r.kb_loaded
+      ? `knowledge base: ${r.kb_chunks} chunks` +
+        (r.kb_age_days != null ? `, ${r.kb_age_days}d old` : "")
+      : "knowledge base: not built (deterministic mode)";
+  } catch { $("kb").textContent = "server unreachable"; }
+}
+
+async function refreshList() {
+  const rows = await (await fetch("/api/v1/assessments")).json();
+  const body = $("list").querySelector("tbody");
+  body.innerHTML = "";
+  $("empty").style.display = rows.length ? "none" : "block";
+  for (const row of rows) {
+    const tr = document.createElement("tr");
+    const when = new Date(row.created_at).toLocaleString();
+    tr.innerHTML =
+      `<td>${when}</td>` +
+      `<td>${row.source_version} → ${row.target_version}</td>` +
+      `<td><span class="badge ${row.verdict}">${row.verdict}</span></td>` +
+      `<td>${row.readiness}/100 <span class="kb">(conf ${row.confidence})</span></td>` +
+      `<td>${row.findings}${row.blocking ? ` (${row.blocking} blocking)` : ""}</td>` +
+      `<td><a href="/api/v1/assessments/${row.id}/html" target="_blank">html</a> · ` +
+      `<a href="/api/v1/assessments/${row.id}" target="_blank">json</a></td>`;
+    body.appendChild(tr);
+  }
+}
+
+$("file").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  if (file) $("snapshot").value = await file.text();
+});
+
+$("form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  $("error").textContent = "";
+  let snapshot;
+  try { snapshot = JSON.parse($("snapshot").value); }
+  catch { $("error").textContent = "Snapshot is not valid JSON."; return; }
+
+  $("submit").disabled = true;
+  $("submit").textContent = "Assessing…";
+  try {
+    const resp = await fetch("/api/v1/assessments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source_version: $("source").value.trim(),
+        target_version: $("target").value.trim(),
+        snapshot,
+        dry_run: $("dryrun").checked,
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      $("error").textContent = typeof data.detail === "string"
+        ? data.detail : JSON.stringify(data.detail, null, 2);
+    } else {
+      window.open(`/api/v1/assessments/${data.id}/html`, "_blank");
+      await refreshList();
+    }
+  } catch (err) {
+    $("error").textContent = String(err);
+  } finally {
+    $("submit").disabled = false;
+    $("submit").textContent = "Assess upgrade";
+  }
+});
+
+refreshKb();
+refreshList();
+</script>
+</body>
+</html>

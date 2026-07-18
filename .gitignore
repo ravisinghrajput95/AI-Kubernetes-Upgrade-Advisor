@@ -1,9 +1,10 @@
-# Knowledge base (large binary files + scraped content)
-kb/faiss.index
-kb/chunks_meta.pkl
-kb/raw/
+# Knowledge base (built artifacts + scraped content)
+kb/
 
-# Cluster snapshots (may contain sensitive data)
+# Generated reports
+reports/
+
+# Cluster snapshots (may contain sensitive data) — tests/fixtures are tracked
 *.cluster.json
 cluster*.json
 
@@ -21,6 +22,8 @@ build/
 .eggs/
 venv/
 .venv/
+.pytest_cache/
+.ruff_cache/
 
 # Editors
 .vscode/

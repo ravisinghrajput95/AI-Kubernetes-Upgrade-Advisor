@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "collected_at": "2026-07-18T04:15:29.857671Z",
+  "source": "live",
+  "context": null,
+  "kubectl": {
+    "version": {
+      "args": [],
+      "stdout": "{\"serverVersion\": {\"gitVersion\": \"v1.26.12-eks-1234\"}}",
+      "stderr": "",
+      "returncode": 0,
+      "duration_ms": 0,
+      "error": null
+    },
+    "nodes": {
+      "args": [],
+      "stdout": "NAME STATUS\nn1 Ready\nn2 Ready\nn3 Ready",
+      "stderr": "",
+      "returncode": 0,
+      "duration_ms": 0,
+      "error": null
+    },
+    "nodes_json": {
+      "args": [],
+      "stdout": "{\"items\": [{\"metadata\": {\"name\": \"ip-10-0-0-1.ec2.internal\", \"labels\": {\"eks.amazonaws.com/nodegroup\": \"workers-a\"}}, \"spec\": {\"providerID\": \"aws:///us-east-1a/i-0abc0\"}, \"status\": {\"nodeInfo\": {\"kubeletVersion\": \"v1.26.15-eks-ae9a62a\", \"osImage\": \"Amazon Linux 2\", \"containerRuntimeVersion\": \"containerd://1.6.19\"}, \"conditions\": [{\"type\": \"Ready\", \"status\": \"True\"}]}}, {\"metadata\": {\"name\": \"ip-10-0-1-1.ec2.internal\", \"labels\": {\"eks.amazonaws.com/nodegroup\": \"workers-a\"}}, \"spec\": {\"providerID\": \"aws:///us-east-1a/i-0abc1\"}, \"status\": {\"nodeInfo\": {\"kubeletVersion\": \"v1.26.15-eks-ae9a62a\", \"osImage\": \"Amazon Linux 2\", \"containerRuntimeVersion\": \"containerd://1.6.19\"}, \"conditions\": [{\"type\": \"Ready\", \"status\": \"True\"}]}}, {\"metadata\": {\"name\": \"ip-10-0-2-1.ec2.internal\", \"labels\": {\"eks.amazonaws.com/nodegroup\": \"workers-a\"}}, \"spec\": {\"providerID\": \"aws:///us-east-1a/i-0abc2\"}, \"status\": {\"nodeInfo\": {\"kubeletVersion\": \"v1.26.15-eks-ae9a62a\", \"osImage\": \"Amazon Linux 2\", \"containerRuntimeVersion\": \"containerd://1.6.19\"}, \"conditions\": [{\"type\": \"Ready\", \"status\": \"True\"}]}}]}",
+      "stderr": "",
+      "returncode": 0,
+      "duration_ms": 0,
+      "error": null
+    },
+    "api_versions": {
+      "args": [],
+      "stdout": "apps/v1\npolicy/v1\npolicy/v1beta1\nflowcontrol.apiserver.k8s.io/v1beta2\nautoscaling/v2",
+      "stderr": "",
+      "returncode": 0,
+      "duration_ms": 0,
+      "error": null
+    },
+    "api_resources": {
+      "args": [],
+      "stdout": "deployments apps true Deployment",
+      "stderr": "",
+      "returncode": 0,
+      "duration_ms": 0,
+      "error": null
+    },
+    "crds": {
+      "args": [],
+      "stdout": "certificates.cert-manager.io\nnodepools.karpenter.sh",
+      "stderr": "",
+      "returncode": 0,
+      "duration_ms": 0,
+      "error": null
+    },
+    "deployments": {
+      "args": [],
+      "stdout": "NS NAME IMAGES\ncert-manager cert-manager quay.io/jetstack/cert-manager-controller:v1.11.0\nkarpenter karpenter public.ecr.aws/karpenter/controller:0.31.0\ningress-nginx ctrl registry.k8s.io/ingress-nginx/controller:v1.8.1",
+      "stderr": "",
+      "returncode": 0,
+      "duration_ms": 0,
+      "error": null
+    },
+    "statefulsets": {
+      "args": [],
+      "stdout": "NS NAME\n",
+      "stderr": "",
+      "returncode": 0,
+      "duration_ms": 0,
+      "error": null
+    },
+    "daemonsets": {
+      "args": [],
+      "stdout": "kube-system aws-node amazon-k8s-cni:v1.13.0",
+      "stderr": "",
+      "returncode": 0,
+      "duration_ms": 0,
+      "error": null
+    },
+    "jobs": {
+      "args": [],
+      "stdout": "",
+      "stderr": "",
+      "returncode": 0,
+      "duration_ms": 0,
+      "error": null
+    },
+    "cronjobs": {
+      "args": [],
+      "stdout": "",
+      "stderr": "",
+      "returncode": 0,
+      "duration_ms": 0,
+      "error": null
+    },
+    "validating_webhooks": {
+      "args": [],
+      "stdout": "cert-manager-webhook",
+      "stderr": "",
+      "returncode": 0,
+      "duration_ms": 0,
+      "error": null
+    },
+    "mutating_webhooks": {
+      "args": [],
+      "stdout": "cert-manager-webhook",
+      "stderr": "",
+      "returncode": 0,
+      "duration_ms": 0,
+      "error": null
+    },
+    "pdbs": {
+      "args": [],
+      "stdout": "NS NAME\nfoo pdb-1",
+      "stderr": "",
+      "returncode": 0,
+      "duration_ms": 0,
+      "error": null
+    },
+    "psp": {
+      "args": [],
+      "stdout": "NAME\neks.privileged",
+      "stderr": "",
+      "returncode": 0,
+      "duration_ms": 0,
+      "error": null
+    },
+    "top_nodes": {
+      "args": [],
+      "stdout": "n1 5% 10%",
+      "stderr": "",
+      "returncode": 0,
+      "duration_ms": 0,
+      "error": null
+    }
+  },
+  "helm_releases": [
+    {
+      "name": "cert-manager",
+      "namespace": "cert-manager",
+      "chart": "cert-manager-v1.11.0",
+      "chart_name": "cert-manager",
+      "chart_version": "v1.11.0",
+      "app_version": "v1.11.0",
+      "status": "",
+      "revision": null
+    }
+  ],
+  "helm_available": true
+}

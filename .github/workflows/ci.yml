@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - name: ruff lint
+        run: ruff check src tests
+      - name: ruff format check
+        run: ruff format --check src tests
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: pip install -e ".[api,dev]"
+      - name: pytest
+        run: pytest -v
+
+  build-image:
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build container image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: k8s-upgrade-advisor:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  assess-example:
+    # Dogfood: run the CLI against the bundled EKS fixture and publish the
+    # markdown report as a build artifact. --fail-on never: this job shows
+    # the tool working, the fixture is intentionally not upgrade-ready.
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e .
+      - run: |
+          k8s-upgrade-advisor assess -s 1.26 -t 1.29 \
+            --snapshot tests/fixtures/eks_1_26.json \
+            --dry-run --fail-on never \
+            --md example-report.md --html example-report.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: example-assessment
+          path: example-report.*

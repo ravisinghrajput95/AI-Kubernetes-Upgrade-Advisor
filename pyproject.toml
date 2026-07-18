@@ -1,0 +1,94 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "k8s-upgrade-advisor"
+version = "2.0.0"
+description = "AI-powered Kubernetes upgrade intelligence platform: deterministic compatibility analysis + RAG-grounded reasoning for safe cluster upgrades"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Ravi Rajput" }]
+keywords = ["kubernetes", "upgrade", "platform-engineering", "rag", "sre"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: System Administrators",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: System :: Systems Administration",
+]
+
+dependencies = [
+    "pydantic>=2.7",
+    "pydantic-settings>=2.2",
+    "structlog>=24.1",
+    "prometheus-client>=0.20",
+    "requests>=2.31",
+    "beautifulsoup4>=4.12",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.30",
+]
+rag = [
+    # Heavy, optional. The platform degrades gracefully to the built-in
+    # lexical + hash-embedding backends when these are absent.
+    "faiss-cpu>=1.8",
+    "sentence-transformers>=2.7",
+]
+otel = [
+    "opentelemetry-api>=1.25",
+    "opentelemetry-sdk>=1.25",
+    "opentelemetry-exporter-otlp>=1.25",
+    "opentelemetry-instrumentation-fastapi>=0.46b0",
+]
+dev = [
+    "pytest>=8.2",
+    "httpx>=0.27",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+k8s-upgrade-advisor = "k8s_upgrade_advisor.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/ravisinghrajput95/AI-Kubernetes-Upgrade-Advisor"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/k8s_upgrade_advisor"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",      # pycodestyle / pyflakes
+    "I",                # isort
+    "B",                # bugbear
+    "UP",               # pyupgrade
+    "SIM",              # simplify
+    "C4",               # comprehensions
+]
+ignore = [
+    "E501",             # line length handled by formatter
+    "UP042",            # (str, Enum) kept over StrEnum: explicit pydantic-v2 JSON contract
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "integration: end-to-end tests exercising CLI/API surfaces",
+]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.coverage.run]
+source = ["src/k8s_upgrade_advisor"]

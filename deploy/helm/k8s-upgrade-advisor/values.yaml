@@ -1,0 +1,42 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/ravisinghrajput95/k8s-upgrade-advisor
+  tag: ""            # defaults to chart appVersion
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+# OPENAI_API_KEY is read from this secret (key: OPENAI_API_KEY). Leave empty
+# to run in deterministic/dry-run mode only.
+llm:
+  existingSecret: ""
+  model: gpt-4o
+
+# Persist the knowledge base and reports across restarts.
+persistence:
+  enabled: false
+  size: 2Gi
+  storageClassName: ""
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
+
+# Extra environment (K8S_ADVISOR_* settings overrides).
+env: {}
+#  K8S_ADVISOR_RETRIEVAL__TOP_K: "32"
+
+serviceMonitor:
+  enabled: false
+  interval: 30s
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
