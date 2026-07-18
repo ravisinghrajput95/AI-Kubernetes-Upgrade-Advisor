@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "k8s-upgrade-advisor"
-version = "2.1.0"
+version = "2.2.0"
 description = "AI-powered Kubernetes upgrade intelligence platform: deterministic compatibility analysis + RAG-grounded reasoning for safe cluster upgrades"
 readme = "README.md"
 requires-python = ">=3.11"
