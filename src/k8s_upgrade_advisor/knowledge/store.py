@@ -52,6 +52,18 @@ class Manifest:
         return (datetime.now(UTC) - built).total_seconds() / 86400
 
 
+def read_manifest(kb_dir: Path) -> Manifest | None:
+    """Read only the manifest — the cheap KB status check for readiness
+    probes and cache invalidation. Never deserializes chunks or vectors."""
+    path = kb_dir / MANIFEST_FILE
+    if not path.is_file():
+        return None
+    try:
+        return Manifest(**json.loads(path.read_text()))
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
 class KnowledgeStore:
     def __init__(self, chunks: list[Chunk], vectors: np.ndarray, manifest: Manifest) -> None:
         if len(chunks) != vectors.shape[0]:

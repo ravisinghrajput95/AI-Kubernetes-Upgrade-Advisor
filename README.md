@@ -129,7 +129,7 @@ Full architecture, sequence diagrams, and decision records: [`docs/`](docs/).
 
 ```bash
 pip install -e ".[api,dev]"
-pytest              # 103 tests, <1s, no network/kubectl/LLM needed
+pytest              # 120+ tests, seconds, no network/kubectl/LLM needed
 ruff check src tests
 ```
 

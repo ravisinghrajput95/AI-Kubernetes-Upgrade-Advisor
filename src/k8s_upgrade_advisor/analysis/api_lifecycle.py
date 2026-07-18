@@ -23,6 +23,16 @@ from ..models import (
     Severity,
 )
 
+# The newest Kubernetes minor the static tables below have been reviewed
+# against. Assessments targeting anything newer get an explicit
+# "beyond knowledge horizon" finding and a readiness cap — an empty findings
+# list must never masquerade as safety. Bump BOTH constants when reviewing
+# tables for a new release (see docs/development.md release checklist).
+KNOWLEDGE_HORIZON = "1.33"
+TABLES_LAST_REVIEWED = "2026-07-18"
+
+HORIZON_FINDING_ID = "knowledge-horizon-exceeded"
+
 
 @dataclass(frozen=True)
 class APIRemoval:
@@ -429,3 +439,42 @@ def detect_behavior_findings(
                 )
             )
     return findings
+
+
+def horizon_findings(source: KubeVersion, target: KubeVersion) -> list[Finding]:
+    """Honesty guard: when the target minor is newer than the reviewed
+    tables, say so loudly. The risk engine caps readiness on this finding —
+    'no removals found' beyond the horizon means 'not looked', not 'safe'."""
+    horizon = KubeVersion.parse(KNOWLEDGE_HORIZON)
+    if target <= horizon:
+        return []
+    return [
+        Finding(
+            id=HORIZON_FINDING_ID,
+            title=f"Target {target.minor_str} is beyond the reviewed knowledge horizon "
+            f"({KNOWLEDGE_HORIZON})",
+            category=FindingCategory.UPGRADE_PATH,
+            severity=Severity.HIGH,
+            origin=FindingOrigin.DETERMINISTIC,
+            description=(
+                f"The static API-lifecycle and compatibility tables in this build were last "
+                f"reviewed against Kubernetes {KNOWLEDGE_HORIZON} (on {TABLES_LAST_REVIEWED}). "
+                f"API removals and component support for "
+                f"{', '.join(v.minor_str for v in KubeVersion.parse(KNOWLEDGE_HORIZON).minors_until(target))} "
+                "are NOT covered — an empty findings list for those minors means unexamined, "
+                "not safe. Readiness is capped accordingly."
+            ),
+            remediation=(
+                "Upgrade k8s-upgrade-advisor to a build whose tables cover the target minor, "
+                "and cross-check the official deprecation guide and CHANGELOG for versions "
+                "beyond the horizon."
+            ),
+            evidence=[
+                Evidence(
+                    kind="static-table",
+                    detail=f"Table coverage ends at {KNOWLEDGE_HORIZON}; "
+                    f"target is {target.minor_str}.",
+                )
+            ],
+        )
+    ]

@@ -158,7 +158,7 @@ def build_plan(
             UpgradePhase.ADDONS,
             f"Upgrade cluster addons for {v}",
             "CoreDNS, kube-proxy, CNI, CSI drivers, metrics-server to versions matching "
-            f"{v}; managed addons via provider APIs.",
+            f"{v}; managed addons via provider APIs." + _addon_requirements(profile, hop),
             minutes=20,
         )
         step(
@@ -199,6 +199,25 @@ def build_plan(
         pre_upgrade_checklist=_pre_checklist(profile),
         post_upgrade_validation=_post_checklist(profile),
     )
+
+
+def _addon_requirements(profile: ClusterProfileSummary, hop: KubeVersion) -> str:
+    """Concrete per-hop minimums for detected components, from the same
+    support matrices the compatibility engine uses. Turns 'upgrade addons'
+    into 'Cluster Autoscaler → >=1.29, Cilium → >=1.15'."""
+    from .compatibility import MATRICES  # local import avoids a module cycle
+
+    requirements = []
+    for component in profile.components:
+        matrix = MATRICES.get(component.key)
+        if matrix is None:
+            continue
+        minimum = matrix.min_component_for_k8s.get(hop.minor_str)
+        if minimum:
+            requirements.append(f"{component.display_name} → >={minimum}")
+    if not requirements:
+        return ""
+    return " Detected components required at this hop: " + ", ".join(sorted(requirements)) + "."
 
 
 def _strategy(profile: ClusterProfileSummary, hops: list[KubeVersion]) -> str:

@@ -72,6 +72,7 @@ class OpenAIProvider:
             failure_threshold=settings.circuit_failure_threshold,
             reset_timeout=settings.circuit_reset_seconds,
         )
+        self.last_usage: dict[str, int] | None = None
 
     def complete_json(self, system: str, user: str) -> str:
         started = time.monotonic()
@@ -123,6 +124,16 @@ class OpenAIProvider:
             choice = data["choices"][0]
             if choice.get("finish_reason") == "length":
                 log.warning("llm_truncated", hint="raise llm.max_output_tokens")
+            usage = data.get("usage") or {}
+            if usage:
+                self.last_usage = {
+                    "prompt_tokens": int(usage.get("prompt_tokens", 0)),
+                    "completion_tokens": int(usage.get("completion_tokens", 0)),
+                }
+                for direction in ("prompt", "completion"):
+                    metrics.llm_tokens_total.labels(provider=self.name, direction=direction).inc(
+                        self.last_usage[f"{direction}_tokens"]
+                    )
             return choice["message"]["content"]
 
         return _once()

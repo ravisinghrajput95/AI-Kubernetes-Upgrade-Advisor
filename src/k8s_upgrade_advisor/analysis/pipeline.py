@@ -40,6 +40,7 @@ def run_deterministic_analysis(
         node_runtimes=[n.container_runtime for n in prof.nodes],
     )
     findings += skew.skew_findings(prof.nodes, source, target)
+    findings += api_lifecycle.horizon_findings(source, target)
     matrix, compat_findings = compatibility.compatibility_findings(detected, target)
     findings += compat_findings
 

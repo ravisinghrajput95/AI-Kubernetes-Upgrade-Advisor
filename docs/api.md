@@ -34,8 +34,9 @@ itself never contacts clusters (see deployment.md).
 Recent assessment summaries (id, versions, verdict, scores, finding counts).
 
 ### `GET /api/v1/assessments/{id}`
-Full report JSON. `404` if the id has aged out of the in-memory window (disk
-artifacts in `reports/` remain).
+Full report JSON. Recent reports are served from memory; older ones are
+transparently reloaded from the persisted `reports/<id>.json` artifact, so
+reports survive server restarts.
 
 ### `GET /api/v1/assessments/{id}/html` · `GET /api/v1/assessments/{id}/markdown`
 Rendered artifacts.

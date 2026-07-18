@@ -13,7 +13,7 @@
 | `llm` | **Recommendation Engine** — provider abstraction (retry/circuit-breaker), grounded prompts, schema validation with one repair round-trip, trust-boundary merge |
 | `reporting` | **Report Generator** — Markdown/HTML/JSON from `AssessmentReport`, never from prose |
 | `api` | **Backend API** — FastAPI, health/readiness, Prometheus `/metrics`, optional OTel |
-| `frontend` | Static single-page UI served by the API |
+| `frontend` | Static single-page UI, bundled as package data inside the wheel and served by the API |
 | `service` | Orchestrator used identically by CLI, API, and tests |
 | `observability`, `resilience`, `errors` | structlog, metrics registry, retry/breaker, typed failures with exit codes |
 
@@ -74,7 +74,8 @@ fabricate a source.
 
 - **Readiness** (0–100): starts at 100, penalized per finding severity
   (critical 30 · high 12 · medium 5 · low 2), then **capped** by evidence quality
-  (unobservable cluster → 60, mostly-unresolved versions → 80, any unknowns → 95).
+  (unobservable cluster → 60, target beyond the reviewed table horizon → 70,
+  mostly-unresolved versions → 80, any unknowns → 95; lowest applicable cap wins).
   Verdict: ≥85 READY · ≥65 READY-WITH-CAUTIONS · else NOT-READY; any blocking
   finding forces BLOCKED.
 - **Confidence** (0–100): how much we could see — critical-command coverage 45%,

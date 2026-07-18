@@ -19,6 +19,9 @@ OPENAI_API_KEY=sk-... k8s-upgrade-advisor assess -s 1.28 -t 1.31 --snapshot clus
 
 ## Container
 
+Release images are published by CI on version tags:
+`ghcr.io/ravisinghrajput95/k8s-upgrade-advisor:<tag>`. To build locally:
+
 ```bash
 docker build -t k8s-upgrade-advisor .
 docker run -p 8080:8080 -e OPENAI_API_KEY=sk-... \

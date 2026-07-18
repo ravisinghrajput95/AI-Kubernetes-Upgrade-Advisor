@@ -39,11 +39,21 @@ deterministic findings.
 
 def build_user_prompt(report: AssessmentReport, context_text: str) -> str:
     profile = report.profile
+    # Token budget: findings are already severity-ordered; a pathological
+    # cluster with hundreds of findings must not blow the context window.
+    shown_findings = report.findings_by_severity()[:40]
+    omitted = len(report.findings) - len(shown_findings)
     findings_block = (
         "\n".join(
             f"- [{f.severity.value.upper()}]{' [BLOCKING]' if f.blocking else ''} "
             f"({f.category.value}) {f.title} — {f.description[:300]}"
-            for f in report.findings
+            for f in shown_findings
+        )
+        + (
+            f"\n- (+{omitted} lower-severity findings omitted from prompt; "
+            "they appear in the deterministic report)"
+            if omitted > 0
+            else ""
         )
         or "- none"
     )

@@ -117,11 +117,15 @@
       "error": null
     },
     "psp": {
-      "args": [],
-      "stdout": "NAME\neks.privileged",
-      "stderr": "",
-      "returncode": 0,
-      "duration_ms": 0,
+      "args": [
+        "kubectl",
+        "get",
+        "psp"
+      ],
+      "stdout": "",
+      "stderr": "error: the server doesn't have a resource type \"psp\"",
+      "returncode": 1,
+      "duration_ms": 120,
       "error": null
     },
     "top_nodes": {

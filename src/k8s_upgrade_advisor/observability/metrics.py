@@ -45,6 +45,18 @@ class Metrics:
             buckets=(1, 5, 15, 30, 60, 120, 300),
             registry=self.registry,
         )
+        self.llm_tokens_total = Counter(
+            "advisor_llm_tokens_total",
+            "LLM tokens consumed, by direction (prompt/completion)",
+            ["provider", "direction"],
+            registry=self.registry,
+        )
+        self.build_info = Gauge(
+            "advisor_build_info",
+            "Build/version info (value is always 1)",
+            ["version"],
+            registry=self.registry,
+        )
         self.retrieval_seconds = Histogram(
             "advisor_retrieval_seconds",
             "Hybrid retrieval latency per assessment",

@@ -22,6 +22,7 @@ from ..models import (
     ReadinessScore,
     Severity,
 )
+from .api_lifecycle import HORIZON_FINDING_ID
 
 # Commands that are expected to fail on some flavours — not evidence gaps.
 _EXPECTED_MISSING: dict[str, set[str]] = {
@@ -115,19 +116,28 @@ def compute_readiness(findings: list[Finding], metrics: EvidenceMetrics) -> Read
     raw = max(0, 100 - penalty)
 
     # Evidence-based caps: what score can the data support at all?
-    cap, cap_reason = 100, ""
+    # Candidate caps are collected and the lowest wins, so multiple evidence
+    # gaps cannot mask each other.
+    caps: list[tuple[int, str]] = [(100, "")]
     if metrics.critical_coverage < 1.0:
-        cap, cap_reason = (
-            60,
-            ("critical inventory commands failed — the cluster was not fully observable"),
+        caps.append(
+            (60, "critical inventory commands failed — the cluster was not fully observable")
         )
-    elif metrics.unknown_risks and metrics.version_resolution_rate < 0.5:
-        cap, cap_reason = (
-            80,
-            ("most component versions unresolved — compatibility verdicts are incomplete"),
+    if any(f.id == HORIZON_FINDING_ID for f in findings):
+        caps.append(
+            (
+                70,
+                "target version is beyond the reviewed static-table horizon — "
+                "API removals and compatibility for newer minors are unexamined",
+            )
         )
-    elif metrics.unknown_risks:
-        cap, cap_reason = 95, "unverified risks remain (see Unknown Risks)"
+    if metrics.unknown_risks and metrics.version_resolution_rate < 0.5:
+        caps.append(
+            (80, "most component versions unresolved — compatibility verdicts are incomplete")
+        )
+    if metrics.unknown_risks:
+        caps.append((95, "unverified risks remain (see Unknown Risks)"))
+    cap, cap_reason = min(caps, key=lambda pair: pair[0])
 
     score = min(raw, cap)
     has_blockers = any(f.blocking for f in findings)

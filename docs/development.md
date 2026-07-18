@@ -32,6 +32,7 @@ src/k8s_upgrade_advisor/
 ├── llm/                 # provider (retry/breaker), prompts, trust-boundary merge
 ├── reporting/           # markdown/html/json renderers
 ├── api/                 # FastAPI app
+├── frontend/            # single-page UI (package data, served at /)
 └── observability/       # structlog + Prometheus metrics
 ```
 
@@ -66,5 +67,7 @@ provider-agnostic.
 **Release checklist for a new k8s minor**
 1. `API_REMOVALS` / `BEHAVIOR_CHANGES` from the deprecation guide + CHANGELOG
 2. `MATRICES` rows for the new minor
-3. `sources.py` — nothing (CHANGELOG URLs are templated)
-4. Fixture + tests for at least one new-removal path
+3. Bump `KNOWLEDGE_HORIZON` and `TABLES_LAST_REVIEWED` in `api_lifecycle.py` —
+   assessments beyond the horizon are capped until this is done
+4. `sources.py` — nothing (CHANGELOG URLs are templated)
+5. Fixture + tests for at least one new-removal path

@@ -16,8 +16,8 @@ LABEL org.opencontainers.image.title="k8s-upgrade-advisor" \
       org.opencontainers.image.source="https://github.com/ravisinghrajput95/AI-Kubernetes-Upgrade-Advisor"
 
 RUN useradd --create-home --uid 10001 advisor
+# Frontend ships as package data inside the wheel — nothing else to copy.
 COPY --from=build /install /usr/local
-COPY frontend /app/frontend
 
 # The server assesses uploaded snapshots; kubectl is intentionally not in the
 # image. Live collection happens where the kubeconfig lives:

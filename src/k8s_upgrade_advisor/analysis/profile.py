@@ -107,8 +107,15 @@ def detect_flavour(snapshot: ClusterSnapshot) -> tuple[ClusterFlavour, list[str]
         if prefix == "gce":
             return ClusterFlavour.GKE, [f"node providerID prefix '{prefix}://'"]
         if prefix == "aws":
-            evidence.append("node providerID aws:// (EKS or self-managed on AWS)")
-            return ClusterFlavour.EKS, evidence
+            # aws:// alone does not mean EKS — kubeadm/kOps on EC2 report the
+            # same prefix. Claim EKS only with an EKS-specific label; the
+            # apiserver gitVersion suffix (-eks-) was already checked above.
+            if "eks.amazonaws.com" in nodes_json:
+                return ClusterFlavour.EKS, ["EKS node labels (eks.amazonaws.com/*)"]
+            evidence.append(
+                "node providerID aws:// without EKS gitVersion suffix or EKS labels — "
+                "self-managed cluster on AWS"
+            )
 
     nodes_out = snapshot.stdout("nodes")
     if "docker-desktop" in nodes_out:

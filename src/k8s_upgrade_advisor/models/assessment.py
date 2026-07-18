@@ -235,6 +235,8 @@ class LLMMetadata(BaseModel):
     model: str = ""
     prompt_chars: int = 0
     completion_chars: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
     duration_ms: int = 0
     dry_run: bool = False
 

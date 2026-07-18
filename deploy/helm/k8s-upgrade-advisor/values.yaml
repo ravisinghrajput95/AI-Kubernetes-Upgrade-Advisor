@@ -1,3 +1,7 @@
+# Keep at 1 unless /data is on a shared (RWX) volume: recent-report
+# listings are per-replica, and report retrieval falls back to the JSON
+# artifacts in /data/reports — replicas without a shared volume will not
+# see each other's assessments.
 replicaCount: 1
 
 image:

@@ -64,6 +64,10 @@ def run_llm_analysis(
     analysis = _validate_with_repair(raw, provider, user_prompt)
     report.llm.completion_chars = len(raw)
     report.llm.duration_ms = int((time.monotonic() - started) * 1000)
+    usage = getattr(provider, "last_usage", None)
+    if usage:
+        report.llm.prompt_tokens = usage.get("prompt_tokens", 0)
+        report.llm.completion_tokens = usage.get("completion_tokens", 0)
 
     _merge(report, analysis, citations)
     return report
@@ -132,13 +136,17 @@ def _merge(report: AssessmentReport, analysis: LLMAnalysis, citations: list[Cita
     if analysis.downtime.control_plane_impact or analysis.downtime.workload_impact:
         report.downtime = analysis.downtime
 
-    # ── Citations: keep only refs that exist ─────────────────────────────
+    # ── Citations: keep only refs the model actually used ────────────────
+    # An empty result stays empty — attaching unused citations would imply
+    # grounding that never happened.
     valid_refs = {c.ref for c in citations}
     used = [ref for ref in analysis.citations_used if ref in valid_refs]
     dropped = set(analysis.citations_used) - set(used)
     if dropped:
         log.warning("llm_invalid_citations_dropped", refs=sorted(dropped))
-    report.citations = [c for c in citations if c.ref in used] or citations
+    if not used and citations:
+        log.warning("llm_no_citations_used", retrieved=len(citations))
+    report.citations = [c for c in citations if c.ref in used]
 
     log.info(
         "llm_merge_complete",
