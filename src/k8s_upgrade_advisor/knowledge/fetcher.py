@@ -25,7 +25,7 @@ from .sources import DocSource
 log = get_logger(__name__)
 
 _USER_AGENT = (
-    "k8s-upgrade-advisor/2.0 (+https://github.com/ravisinghrajput95/AI-Kubernetes-Upgrade-Advisor)"
+    "k8s-upgrade-advisor/2.0 (+https://github.com/ravisinghrajput95/k8s-upgrade-advisor)"
 )
 
 

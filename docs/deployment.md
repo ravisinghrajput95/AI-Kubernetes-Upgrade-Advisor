@@ -11,7 +11,7 @@
 ## CLI
 
 ```bash
-pip install "k8s-upgrade-advisor[api,rag] @ git+https://github.com/ravisinghrajput95/AI-Kubernetes-Upgrade-Advisor"
+pip install "k8s-upgrade-advisor[api,rag] @ git+https://github.com/ravisinghrajput95/k8s-upgrade-advisor"
 k8s-upgrade-advisor snapshot cluster.json --context prod --kubeconfig ~/.kube/config
 k8s-upgrade-advisor collect -s 1.28 -t 1.31 && k8s-upgrade-advisor build-kb -s 1.28 -t 1.31
 OPENAI_API_KEY=sk-... k8s-upgrade-advisor assess -s 1.28 -t 1.31 --snapshot cluster.json

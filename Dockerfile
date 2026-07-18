@@ -13,7 +13,7 @@ FROM python:3.12-slim
 
 LABEL org.opencontainers.image.title="k8s-upgrade-advisor" \
       org.opencontainers.image.description="AI Kubernetes upgrade intelligence platform" \
-      org.opencontainers.image.source="https://github.com/ravisinghrajput95/AI-Kubernetes-Upgrade-Advisor"
+      org.opencontainers.image.source="https://github.com/ravisinghrajput95/k8s-upgrade-advisor"
 
 RUN useradd --create-home --uid 10001 advisor
 # Frontend ships as package data inside the wheel — nothing else to copy.

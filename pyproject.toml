@@ -58,7 +58,7 @@ dev = [
 k8s-upgrade-advisor = "k8s_upgrade_advisor.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/ravisinghrajput95/AI-Kubernetes-Upgrade-Advisor"
+Homepage = "https://github.com/ravisinghrajput95/k8s-upgrade-advisor"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/k8s_upgrade_advisor"]

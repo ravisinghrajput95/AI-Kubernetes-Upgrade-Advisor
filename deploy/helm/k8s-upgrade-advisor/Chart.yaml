@@ -6,4 +6,4 @@ version: 2.2.0
 appVersion: "2.2.0"
 keywords: [kubernetes, upgrade, platform-engineering]
 sources:
-  - https://github.com/ravisinghrajput95/AI-Kubernetes-Upgrade-Advisor
+  - https://github.com/ravisinghrajput95/k8s-upgrade-advisor
