@@ -27,7 +27,9 @@ KUBECTL_COMMANDS: dict[str, list[str]] = {
     "version": ["version", "--output=json"],
     "nodes": ["get", "nodes", "-o", "wide"],
     "nodes_json": ["get", "nodes", "-o", "json"],
-    "namespaces": ["get", "ns"],
+    # --show-labels so analyzers can verify Pod Security Admission labels
+    # actually exist after a PSP migration.
+    "namespaces": ["get", "ns", "--show-labels"],
     "api_resources": ["api-resources", "--verbs=list", "-o", "wide"],
     "api_versions": ["api-versions"],
     "api_services": ["get", "apiservices"],
@@ -37,8 +39,13 @@ KUBECTL_COMMANDS: dict[str, list[str]] = {
     "jobs": ["get", "jobs", "-A"],
     "cronjobs": ["get", "cronjobs", "-A"],
     "crds": ["get", "crd"],
+    # Full objects: analyzers inspect status.storedVersions (storage-version
+    # migration debt) and webhook failurePolicy/timeout/selectors.
+    "crds_json": ["get", "crd", "-o", "json"],
     "validating_webhooks": ["get", "validatingwebhookconfigurations"],
     "mutating_webhooks": ["get", "mutatingwebhookconfigurations"],
+    "validating_webhooks_json": ["get", "validatingwebhookconfigurations", "-o", "json"],
+    "mutating_webhooks_json": ["get", "mutatingwebhookconfigurations", "-o", "json"],
     "storage_classes": ["get", "sc"],
     "csi_drivers": ["get", "csidrivers"],
     "pvs": ["get", "pv"],
@@ -138,6 +145,43 @@ def _collect_helm(context: str | None, kubeconfig: str | None) -> tuple[list[Hel
     return releases, True
 
 
+_MAX_MANIFEST_RELEASES = 30
+_MAX_MANIFEST_CHARS = 400_000
+
+
+def _collect_helm_manifests(
+    releases: list[HelmRelease],
+    context: str | None,
+    kubeconfig: str | None,
+    max_workers: int = 6,
+) -> dict[str, str]:
+    """Rendered manifests per release, so analyzers can detect templates
+    still emitting API versions the target Kubernetes removes ('helm upgrade'
+    breaks on those after the cluster upgrade — the mapkubeapis problem).
+    Bounded: first N releases, capped size per manifest."""
+    if not releases:
+        return {}
+
+    def _get_manifest(release: HelmRelease) -> tuple[str, str]:
+        argv = ["helm", "get", "manifest", release.name, "-n", release.namespace]
+        if kubeconfig:
+            argv += ["--kubeconfig", kubeconfig]
+        if context:
+            argv += ["--kube-context", context]
+        result = _run(argv, timeout=20)
+        key = f"{release.namespace}/{release.name}"
+        return key, result.stdout[:_MAX_MANIFEST_CHARS] if result.ok else ""
+
+    manifests: dict[str, str] = {}
+    subset = releases[:_MAX_MANIFEST_RELEASES]
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        for key, text in pool.map(_get_manifest, subset):
+            if text:
+                manifests[key] = text
+    log.info("helm_manifests_collected", releases=len(subset), fetched=len(manifests))
+    return manifests
+
+
 def collect_cluster_snapshot(
     context: str | None = None,
     kubeconfig: str | None = None,
@@ -158,6 +202,7 @@ def collect_cluster_snapshot(
             results[key] = future.result()
 
     helm_releases, helm_available = _collect_helm(context, kubeconfig)
+    helm_manifests = _collect_helm_manifests(helm_releases, context, kubeconfig)
 
     snapshot = ClusterSnapshot(
         source="live",
@@ -165,6 +210,7 @@ def collect_cluster_snapshot(
         kubectl=results,
         helm_releases=helm_releases,
         helm_available=helm_available,
+        helm_manifests=helm_manifests,
     )
     log.info(
         "cluster_collection_finished",

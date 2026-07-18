@@ -57,6 +57,14 @@ API_REMOVALS: tuple[APIRemoval, ...] = (
         "1.9",
         "apps/v1",
     ),
+    APIRemoval("extensions/v1beta1", ("NetworkPolicy",), "1.16", "1.9", "networking.k8s.io/v1"),
+    APIRemoval(
+        "extensions/v1beta1",
+        ("PodSecurityPolicy",),
+        "1.16",
+        "1.10",
+        "policy/v1beta1 (itself removed in 1.25 — migrate to Pod Security Admission)",
+    ),
     # ── 1.22 ────────────────────────────────────────────────────────────
     APIRemoval(
         "admissionregistration.k8s.io/v1beta1",
@@ -113,6 +121,27 @@ API_REMOVALS: tuple[APIRemoval, ...] = (
         "storage.k8s.io/v1",
     ),
     APIRemoval("coordination.k8s.io/v1beta1", ("Lease",), "1.22", "1.19", "coordination.k8s.io/v1"),
+    APIRemoval(
+        "apiregistration.k8s.io/v1beta1",
+        ("APIService",),
+        "1.22",
+        "1.19",
+        "apiregistration.k8s.io/v1",
+    ),
+    APIRemoval(
+        "authentication.k8s.io/v1beta1",
+        ("TokenReview",),
+        "1.22",
+        "1.19",
+        "authentication.k8s.io/v1",
+    ),
+    APIRemoval(
+        "authorization.k8s.io/v1beta1",
+        ("SubjectAccessReview", "SelfSubjectAccessReview", "LocalSubjectAccessReview"),
+        "1.22",
+        "1.19",
+        "authorization.k8s.io/v1",
+    ),
     # ── 1.25 ────────────────────────────────────────────────────────────
     APIRemoval(
         "policy/v1beta1",
@@ -177,9 +206,14 @@ class BehaviorChange:
     severity: Severity
     description: str
     remediation: str
-    detect: str = "always"  # always | docker_runtime | legacy_registry | in_tree_cloud
+    detect: str = "always"  # always | docker_runtime | legacy_registry | in_tree_cloud | psp_in_use
     kep: str = ""
     signals: tuple[str, ...] = field(default=())
+    # Calendar-driven changes (registry freeze) apply to every upgrade window
+    # once their trigger evidence exists — the effective_in gate is skipped.
+    time_based: bool = False
+    # For in_tree_cloud entries: the node providerID prefix this applies to.
+    provider_prefix: str = ""
 
 
 BEHAVIOR_CHANGES: tuple[BehaviorChange, ...] = (
@@ -214,14 +248,53 @@ BEHAVIOR_CHANGES: tuple[BehaviorChange, ...] = (
     BehaviorChange(
         id="legacy-registry-freeze",
         title="k8s.gcr.io frozen — images must come from registry.k8s.io",
-        effective_in="1.27",
+        effective_in="1.27",  # informational only; the freeze is calendar-based
         severity=Severity.MEDIUM,
         description=(
-            "The legacy k8s.gcr.io registry is frozen; images referencing it "
-            "will not receive new tags and may be garbage-collected."
+            "The legacy k8s.gcr.io registry was frozen in April 2023 (calendar-"
+            "based, not tied to any cluster version): images referencing it "
+            "receive no new tags and may disappear. This applies to every "
+            "upgrade window as long as workloads still pull from it."
         ),
         remediation="Repoint image references from k8s.gcr.io to registry.k8s.io.",
         detect="legacy_registry",
+        time_based=True,
+    ),
+    BehaviorChange(
+        id="sa-token-no-autogeneration",
+        title="ServiceAccount token Secrets no longer auto-generated",
+        effective_in="1.24",
+        severity=Severity.MEDIUM,
+        description=(
+            "From 1.24 (LegacyServiceAccountTokenNoAutoGeneration GA), creating a "
+            "ServiceAccount no longer creates a long-lived token Secret. External "
+            "systems that read auto-generated SA token Secrets — CI/CD integrations, "
+            "kubeconfig generators, older client bootstrap flows — break silently. "
+            "In-cluster pods are unaffected (projected tokens)."
+        ),
+        remediation=(
+            "Use the TokenRequest API (kubectl create token) or create explicit "
+            "kubernetes.io/service-account-token Secrets for integrations that "
+            "genuinely need long-lived tokens."
+        ),
+        kep="KEP-2799",
+    ),
+    BehaviorChange(
+        id="sa-legacy-token-cleanup",
+        title="Unused auto-generated ServiceAccount tokens are invalidated",
+        effective_in="1.29",
+        severity=Severity.INFO,
+        description=(
+            "From 1.29 (LegacyServiceAccountTokenCleanUp beta, on by default) "
+            "auto-generated legacy token Secrets unused for a year are labelled "
+            "invalid and later deleted. Long-forgotten external credentials stop "
+            "working some time after the upgrade, not during it."
+        ),
+        remediation=(
+            "Audit kubernetes.io/service-account-token Secrets and migrate consumers "
+            "to TokenRequest before relying on them post-upgrade."
+        ),
+        kep="KEP-2799",
     ),
     BehaviorChange(
         id="kubelet-skew-n3",
@@ -235,18 +308,63 @@ BEHAVIOR_CHANGES: tuple[BehaviorChange, ...] = (
         remediation="",
         kep="KEP-3935",
     ),
+    # In-tree cloud provider removal was STAGED per provider (KEP-2395), not a
+    # single 1.31 event — a self-managed AWS cluster breaks at 1.27, four
+    # minors before the migration completed.
     BehaviorChange(
-        id="in-tree-cloud-provider-removal",
-        title="in-tree cloud providers removed — external cloud-controller-manager required",
-        effective_in="1.31",
+        id="in-tree-cloud-removal-openstack",
+        title="in-tree OpenStack cloud provider removed",
+        effective_in="1.26",
+        severity=Severity.CRITICAL,
+        description=(
+            "The in-tree OpenStack provider was removed in 1.26. Self-managed "
+            "clusters using --cloud-provider=openstack lose node lifecycle, load "
+            "balancer, and volume integration unless the external "
+            "cloud-controller-manager (and Cinder CSI) are deployed first."
+        ),
+        remediation="Deploy openstack-cloud-controller-manager + Cinder CSI before crossing 1.26.",
+        detect="in_tree_cloud",
+        provider_prefix="openstack",
+        kep="KEP-2395",
+    ),
+    BehaviorChange(
+        id="in-tree-cloud-removal-aws",
+        title="in-tree AWS cloud provider removed",
+        effective_in="1.27",
+        severity=Severity.CRITICAL,
+        description=(
+            "The in-tree AWS provider was removed in 1.27 — not 1.31. Self-managed "
+            "clusters on EC2 using --cloud-provider=aws lose node initialization, "
+            "ELB provisioning, and EBS volume integration at the 1.27 hop unless "
+            "the external aws-cloud-controller-manager and EBS CSI driver are "
+            "running first."
+        ),
+        remediation=(
+            "Deploy aws-cloud-controller-manager and the EBS CSI driver (with CSI "
+            "migration verified) before the control plane reaches 1.27."
+        ),
+        detect="in_tree_cloud",
+        provider_prefix="aws",
+        kep="KEP-2395",
+    ),
+    BehaviorChange(
+        id="in-tree-cloud-disabled-azure-gce-vsphere",
+        title="in-tree Azure/GCE/vSphere cloud providers disabled by default",
+        effective_in="1.29",
         severity=Severity.HIGH,
         description=(
-            "1.31 completes the removal of in-tree AWS/Azure/GCP/vSphere cloud "
-            "providers. Self-managed clusters still using --cloud-provider=<name> "
-            "flags must run the external cloud-controller-manager."
+            "From 1.29 the remaining in-tree providers (Azure, GCE, vSphere) are "
+            "disabled by default (DisableCloudProviders on); code removal completed "
+            "by 1.31. Self-managed clusters on these platforms need the external "
+            "cloud-controller-manager from 1.29 unless the gate is explicitly "
+            "re-enabled — and that escape hatch ends at removal."
         ),
-        remediation="Deploy the external cloud-controller-manager and CSI drivers before crossing 1.31.",
+        remediation=(
+            "Deploy the platform's external cloud-controller-manager and CSI driver "
+            "before crossing 1.29; do not rely on re-enabling the feature gate."
+        ),
         detect="in_tree_cloud",
+        provider_prefix="azure|gce|vsphere",
         kep="KEP-2395",
     ),
     BehaviorChange(
@@ -322,6 +440,17 @@ def detect_api_removal_findings(
                     detail="PodSecurityPolicy objects exist in this cluster (kubectl get psp).",
                 )
             )
+            # Migrating *away* from PSP and migrating *to* something are
+            # different claims: verify Pod Security Admission labels exist.
+            if "pod-security.kubernetes.io" not in snapshot.stdout("namespaces"):
+                evidence.append(
+                    Evidence(
+                        kind="cluster-data",
+                        detail="No namespace carries pod-security.kubernetes.io/* labels — "
+                        "no Pod Security Admission replacement is configured; removing PSP "
+                        "leaves workload admission entirely uncontrolled.",
+                    )
+                )
 
         findings.append(
             Finding(
@@ -357,14 +486,17 @@ def detect_behavior_findings(
     source: KubeVersion,
     target: KubeVersion,
     node_runtimes: list[str] | None = None,
+    provider_ids: list[str] | None = None,
+    managed_control_plane: bool = False,
 ) -> list[Finding]:
     findings: list[Finding] = []
     runtimes = node_runtimes or []
+    providers = provider_ids or []
     deploy_images = snapshot.stdout("deployments") + snapshot.stdout("daemonsets")
 
     for change in BEHAVIOR_CHANGES:
         effective = KubeVersion.parse(change.effective_in)
-        if not (source < effective <= target):
+        if not change.time_based and not (source < effective <= target):
             continue
 
         triggered = False
@@ -406,20 +538,26 @@ def detect_behavior_findings(
                         detail="Workload images reference the frozen k8s.gcr.io registry.",
                     )
                 )
-        elif (
-            change.detect == "in_tree_cloud"
-            # Managed clusters handle this server-side; only relevant when we
-            # cannot prove an external CCM is running on a self-managed cluster.
-            and "cloud-controller-manager" not in deploy_images
-        ):
-            triggered = True
-            evidence.append(
-                Evidence(
-                    kind="cluster-data",
-                    detail="No external cloud-controller-manager detected in workloads; "
-                    "verify cloud provider integration mode before crossing 1.31.",
+        elif change.detect == "in_tree_cloud":
+            # Only self-managed clusters on the matching platform are affected:
+            # managed control planes handle cloud integration server-side, and an
+            # external CCM already running means the migration is done.
+            prefixes = tuple(change.provider_prefix.split("|"))
+            matching = [p for p in providers if p.split(":", 1)[0] in prefixes]
+            if (
+                matching
+                and not managed_control_plane
+                and "cloud-controller-manager" not in deploy_images
+            ):
+                triggered = True
+                evidence.append(
+                    Evidence(
+                        kind="cluster-data",
+                        detail=f"{len(matching)} node(s) have {matching[0].split(':', 1)[0]}:// "
+                        "providerIDs on a self-managed control plane, and no external "
+                        "cloud-controller-manager is detected in workloads.",
+                    )
                 )
-            )
 
         if triggered:
             findings.append(

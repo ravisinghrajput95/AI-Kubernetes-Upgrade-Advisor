@@ -12,9 +12,11 @@ must be upgraded before/with which control plane hop.
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 
 from ..models import (
+    ClusterSnapshot,
     Evidence,
     Finding,
     FindingCategory,
@@ -147,3 +149,84 @@ def _skew_finding(
             ),
         ],
     )
+
+
+_KUBE_PROXY_RE = re.compile(r"kube-proxy[^\s,]*:v?(\d+\.\d+)")
+
+
+def kube_proxy_findings(
+    snapshot: ClusterSnapshot, source: KubeVersion, target: KubeVersion
+) -> list[Finding]:
+    """kube-proxy follows the kubelet skew rule with one extra constraint:
+    it must never be NEWER than kube-apiserver. Version is read from the
+    kube-proxy DaemonSet image tag when present (managed clusters ship it as
+    an addon; self-managed run it per node)."""
+    match = _KUBE_PROXY_RE.search(snapshot.stdout("daemonsets"))
+    if not match:
+        return []
+    try:
+        proxy = KubeVersion.parse(match.group(1))
+    except Exception:
+        return []
+
+    findings: list[Finding] = []
+    if proxy.minor > source.minor:
+        findings.append(
+            Finding(
+                id="skew-kube-proxy-newer-than-apiserver",
+                title=f"kube-proxy {proxy.minor_str} is newer than the control plane "
+                f"{source.minor_str}",
+                category=FindingCategory.VERSION_SKEW,
+                severity=Severity.HIGH,
+                origin=FindingOrigin.DETERMINISTIC,
+                description=(
+                    "The skew policy forbids kube-proxy running ahead of kube-apiserver. "
+                    "This cluster already violates it before the upgrade begins — service "
+                    "routing behaviour is undefined."
+                ),
+                remediation="Align kube-proxy with the control plane minor before planning hops.",
+                blocking=True,
+                evidence=[
+                    Evidence(
+                        kind="cluster-data",
+                        detail=f"kube-proxy image tag v{proxy.minor_str} vs apiserver "
+                        f"{source.minor_str}.",
+                    ),
+                    Evidence(
+                        kind="static-table",
+                        detail="Skew policy: kube-proxy must not be newer than kube-apiserver.",
+                    ),
+                ],
+            )
+        )
+        return findings
+
+    for hop in source.minors_until(target):
+        if hop.minor - proxy.minor > allowed_kubelet_skew(hop):
+            findings.append(
+                Finding(
+                    id=f"skew-kube-proxy-{proxy.minor_str.replace('.', '-')}"
+                    f"-cp-{hop.minor_str.replace('.', '-')}",
+                    title=f"kube-proxy {proxy.minor_str} falls out of skew at control plane "
+                    f"{hop.minor_str}",
+                    category=FindingCategory.VERSION_SKEW,
+                    severity=Severity.HIGH,
+                    origin=FindingOrigin.DETERMINISTIC,
+                    description=(
+                        f"kube-proxy follows the kubelet skew window "
+                        f"(n-{allowed_kubelet_skew(hop)} at {hop.minor_str}); it must be "
+                        "upgraded with the addon phase before this hop."
+                    ),
+                    remediation=f"Upgrade the kube-proxy addon before the control plane reaches "
+                    f"{hop.minor_str}.",
+                    blocking=True,
+                    evidence=[
+                        Evidence(
+                            kind="cluster-data",
+                            detail=f"kube-proxy image tag v{proxy.minor_str} from the DaemonSet listing.",
+                        )
+                    ],
+                )
+            )
+            break
+    return findings

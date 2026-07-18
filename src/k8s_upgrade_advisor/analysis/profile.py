@@ -126,7 +126,11 @@ def detect_flavour(snapshot: ClusterSnapshot) -> tuple[ClusterFlavour, list[str]
         return ClusterFlavour.MINIKUBE, ["node named minikube"]
 
     if "node-role.kubernetes.io/control-plane" in nodes_json or "kubeadm" in nodes_json:
-        evidence.append("self-managed control-plane node labels present")
+        evidence.append(
+            "self-managed control-plane node labels present — assumed kubeadm, but "
+            "kOps/Cluster API/EKS Anywhere present identically; verify the actual "
+            "provisioner before running kubeadm commands"
+        )
         return ClusterFlavour.KUBEADM, evidence
 
     return ClusterFlavour.UNKNOWN, evidence or ["no distribution signal matched"]

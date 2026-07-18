@@ -111,6 +111,9 @@ class ClusterSnapshot(BaseModel):
     kubectl: dict[str, CommandResult] = Field(default_factory=dict)
     helm_releases: list[HelmRelease] = Field(default_factory=list)
     helm_available: bool = False
+    # Rendered manifests per release ("namespace/name" → yaml), used to scan
+    # for templates still emitting removed API versions.
+    helm_manifests: dict[str, str] = Field(default_factory=dict)
 
     def command(self, key: str) -> CommandResult:
         return self.kubectl.get(key, CommandResult(error="not collected"))

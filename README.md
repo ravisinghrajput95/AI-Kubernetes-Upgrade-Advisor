@@ -7,11 +7,12 @@ Supports **EKS · GKE · AKS · OpenShift · Rancher (RKE2/k3s) · kubeadm · ki
 
 ```
 verdict: not-ready  readiness: 47/100 (cap 95)  confidence: 94/100
-findings: 6 (0 blocking)
+findings: 7 (0 blocking)
   🟠 FlowSchema (flowcontrol.apiserver.k8s.io/v1beta2) removed in 1.29
   🟠 cert-manager 1.11.0 does not support Kubernetes 1.29
   🟠 Karpenter 0.31.0 does not support Kubernetes 1.29
   🟡 3-hop upgrade path: control plane must move one minor at a time
+  ⚪ Unused auto-generated ServiceAccount tokens are invalidated (1.29)
 ```
 *(actual output for the bundled EKS 1.26→1.29 fixture — try it:
 `k8s-upgrade-advisor assess -s 1.26 -t 1.29 --snapshot tests/fixtures/eks_1_26.json --dry-run`)*
@@ -36,12 +37,20 @@ deterministic verdict always stands.
 - **API lifecycle** — deprecated/removed APIs from 1.16→1.33 (static table, never guessed),
   detected against what the cluster actually serves; PSP/dockershim usage evidence upgrades
   findings to blocking
-- **Version skew policy** — kubelet n-2/n-3 windows per hop, multi-hop sequencing constraints
+- **Version skew policy** — kubelet and kube-proxy n-2/n-3 windows per hop, kube-proxy-newer-than-apiserver violations, multi-hop sequencing constraints
 - **Component compatibility** — CNI (Cilium/Calico/VPC-CNI), CSI drivers, service mesh
   (Istio/Linkerd), GitOps (Argo CD/Flux), autoscaling (Karpenter/CA/KEDA), cert-manager,
   ingress-nginx and more — versions resolved from **Helm releases → image tags → presence**
-- **KEP-level behaviour changes** — dockershim removal, PSP removal, in-tree cloud provider
-  removal, cgroup v1 maintenance, registry freeze
+- **KEP-level behaviour changes** — dockershim removal, PSP removal (with Pod Security
+  Admission label verification), **per-provider** in-tree cloud provider staging (AWS 1.27,
+  OpenStack 1.26, Azure/GCE/vSphere 1.29+), ServiceAccount token lifecycle (KEP-2799),
+  cgroup v1 maintenance, registry freeze (calendar-based)
+- **Admission webhook mechanics** — failurePolicy=Fail webhooks without scoping selectors
+  (the upgrade-deadlock configuration), long timeouts
+- **CRD storage versions** — `status.storedVersions` migration debt, served-but-deprecated
+  versions
+- **Helm release manifests** — scanned against the removal table (the `mapkubeapis` problem:
+  `helm upgrade` breaking on stored manifests after the cluster upgrade)
 - **Upgrade planning** — per-distribution control-plane/addon/node-pool sequencing with real
   commands (eksctl/gcloud/az/kubeadm/oc), rollback reality (managed control planes can't
   downgrade), downtime estimation from replica/PDB facts

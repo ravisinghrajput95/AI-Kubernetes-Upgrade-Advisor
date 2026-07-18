@@ -37,6 +37,11 @@ class SupportMatrix:
     min_component_for_k8s: dict[str, str]
     recommended: dict[str, str] | None = None
     notes: str = ""
+    # "published": row mirrors an upstream support matrix (source_url).
+    # "inferred": upstream publishes no per-minor minimums; row is a
+    # conservative approximation — findings are downgraded and never gate.
+    confidence: str = "published"
+    source_url: str = ""
 
 
 MATRICES: dict[str, SupportMatrix] = {
@@ -55,6 +60,7 @@ MATRICES: dict[str, SupportMatrix] = {
             "1.33": "1.17",
         },
         notes="Webhook-based; must be compatible *before* the control plane hop.",
+        source_url="https://cert-manager.io/docs/releases/",
     ),
     "ingress-nginx": SupportMatrix(
         "ingress-nginx",
@@ -70,6 +76,7 @@ MATRICES: dict[str, SupportMatrix] = {
             "1.32": "1.12.0",
             "1.33": "1.12.1",
         },
+        source_url="https://github.com/kubernetes/ingress-nginx#supported-versions-table",
     ),
     "istio": SupportMatrix(
         "istio",
@@ -86,6 +93,7 @@ MATRICES: dict[str, SupportMatrix] = {
             "1.33": "1.25",
         },
         notes="Istio supports ~4 k8s minors per release; control plane first, then data-plane rollout.",
+        source_url="https://istio.io/latest/docs/releases/supported-releases/",
     ),
     "cilium": SupportMatrix(
         "cilium",
@@ -102,6 +110,7 @@ MATRICES: dict[str, SupportMatrix] = {
             "1.33": "1.17",
         },
         notes="CNI incompatibility surfaces as node-level networking failure — treat as gating.",
+        source_url="https://docs.cilium.io/en/stable/network/kubernetes/compatibility/",
     ),
     "calico": SupportMatrix(
         "calico",
@@ -117,6 +126,7 @@ MATRICES: dict[str, SupportMatrix] = {
             "1.32": "3.29",
             "1.33": "3.30",
         },
+        source_url="https://docs.tigera.io/calico/latest/getting-started/kubernetes/requirements",
     ),
     "karpenter": SupportMatrix(
         "karpenter",
@@ -133,6 +143,7 @@ MATRICES: dict[str, SupportMatrix] = {
             "1.33": "1.4",
         },
         notes="Karpenter v1 API (NodePool/NodeClaim) required from 0.32+; v1alpha5 Provisioners must be migrated.",
+        source_url="https://karpenter.sh/docs/upgrading/compatibility/",
     ),
     "cluster-autoscaler": SupportMatrix(
         "cluster-autoscaler",
@@ -150,6 +161,7 @@ MATRICES: dict[str, SupportMatrix] = {
             "1.33": "1.33",
         },
         notes="Cluster Autoscaler minor must match the cluster minor exactly (upstream guidance).",
+        source_url="https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler#releases",
     ),
     "argocd": SupportMatrix(
         "argocd",
@@ -165,6 +177,7 @@ MATRICES: dict[str, SupportMatrix] = {
             "1.32": "2.13",
             "1.33": "3.0",
         },
+        confidence="inferred",
     ),
     "flux": SupportMatrix(
         "flux",
@@ -180,6 +193,7 @@ MATRICES: dict[str, SupportMatrix] = {
             "1.32": "2.4",
             "1.33": "2.5",
         },
+        confidence="inferred",
     ),
     "keda": SupportMatrix(
         "keda",
@@ -195,6 +209,7 @@ MATRICES: dict[str, SupportMatrix] = {
             "1.32": "2.16",
             "1.33": "2.17",
         },
+        confidence="inferred",
     ),
     "ebs-csi": SupportMatrix(
         "ebs-csi",
@@ -210,6 +225,8 @@ MATRICES: dict[str, SupportMatrix] = {
             "1.32": "1.38",
             "1.33": "1.42",
         },
+        confidence="inferred",
+        notes="EBS CSI supports broad k8s ranges; per-minor minimums here are conservative approximations.",
     ),
     "metrics-server": SupportMatrix(
         "metrics-server",
@@ -225,6 +242,7 @@ MATRICES: dict[str, SupportMatrix] = {
             "1.32": "0.8",
             "1.33": "0.8",
         },
+        confidence="inferred",
     ),
 }
 
@@ -259,6 +277,11 @@ def evaluate_component(component: DetectedComponent, target: KubeVersion) -> Com
         return entry
 
     entry.minimum_version = minimum
+    inferred = matrix.confidence == "inferred"
+    if inferred:
+        entry.notes = (
+            "(inferred matrix — upstream publishes no per-minor minimums; verify) " + matrix.notes
+        ).strip()
     if component.version is None:
         entry.status = CompatibilityStatus.UNKNOWN
         entry.notes = (
@@ -267,13 +290,14 @@ def evaluate_component(component: DetectedComponent, target: KubeVersion) -> Com
         )
         return entry
 
+    prefix = "(inferred matrix — verify upstream) " if inferred else ""
     if _at_least(component.version, minimum):
         entry.status = CompatibilityStatus.COMPATIBLE
-        entry.notes = matrix.notes
+        entry.notes = (prefix + matrix.notes).strip()
     else:
         entry.status = CompatibilityStatus.UPGRADE_REQUIRED
         entry.notes = (
-            f"Installed {component.version} < required {minimum} for "
+            f"{prefix}Installed {component.version} < required {minimum} for "
             f"Kubernetes {target.minor_str}. {matrix.notes}".strip()
         )
     return entry
@@ -303,14 +327,18 @@ def compatibility_findings(
         entries.append(entry)
 
         if entry.status is CompatibilityStatus.UPGRADE_REQUIRED:
-            gating = entry.kind in _GATING_KINDS
+            matrix = MATRICES.get(component.key)
+            inferred = matrix is not None and matrix.confidence == "inferred"
+            gating = entry.kind in _GATING_KINDS and not inferred
             findings.append(
                 Finding(
                     id=f"compat-{component.key}",
                     title=f"{component.display_name} {component.version} does not support "
                     f"Kubernetes {target.minor_str}",
                     category=category_by_kind.get(entry.kind, FindingCategory.OPERATOR_COMPAT),
-                    severity=Severity.CRITICAL if gating else Severity.HIGH,
+                    severity=Severity.CRITICAL
+                    if gating
+                    else (Severity.MEDIUM if inferred else Severity.HIGH),
                     origin=FindingOrigin.DETERMINISTIC,
                     description=entry.notes,
                     remediation=(

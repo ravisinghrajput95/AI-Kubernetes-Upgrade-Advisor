@@ -19,7 +19,18 @@ from ..models import (
     KubeVersion,
 )
 from ..observability import get_logger
-from . import api_lifecycle, compatibility, components, planner, profile, risk, skew
+from . import (
+    api_lifecycle,
+    compatibility,
+    components,
+    crds,
+    helm_compat,
+    planner,
+    profile,
+    risk,
+    skew,
+    webhooks,
+)
 
 log = get_logger(__name__)
 
@@ -31,6 +42,10 @@ def run_deterministic_analysis(
     detected = components.detect_components(snapshot)
     prof.components = detected
 
+    import re as _re
+
+    provider_ids = _re.findall(r'"providerID":\s*"([^"]+)"', snapshot.stdout("nodes_json"))
+
     findings = []
     findings += api_lifecycle.detect_api_removal_findings(snapshot, source, target)
     findings += api_lifecycle.detect_behavior_findings(
@@ -38,8 +53,14 @@ def run_deterministic_analysis(
         source,
         target,
         node_runtimes=[n.container_runtime for n in prof.nodes],
+        provider_ids=provider_ids,
+        managed_control_plane=prof.flavour.is_managed,
     )
     findings += skew.skew_findings(prof.nodes, source, target)
+    findings += skew.kube_proxy_findings(snapshot, source, target)
+    findings += webhooks.webhook_findings(snapshot)
+    findings += crds.crd_findings(snapshot)
+    findings += helm_compat.helm_release_findings(snapshot, source, target)
     findings += api_lifecycle.horizon_findings(source, target)
     matrix, compat_findings = compatibility.compatibility_findings(detected, target)
     findings += compat_findings

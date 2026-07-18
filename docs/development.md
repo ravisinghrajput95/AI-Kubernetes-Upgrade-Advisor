@@ -66,7 +66,8 @@ provider-agnostic.
 
 **Release checklist for a new k8s minor**
 1. `API_REMOVALS` / `BEHAVIOR_CHANGES` from the deprecation guide + CHANGELOG
-2. `MATRICES` rows for the new minor
+2. `MATRICES` rows for the new minor — mark rows `confidence="inferred"` unless an
+   upstream support matrix exists (cite it in `source_url`)
 3. Bump `KNOWLEDGE_HORIZON` and `TABLES_LAST_REVIEWED` in `api_lifecycle.py` —
    assessments beyond the horizon are capped until this is done
 4. `sources.py` — nothing (CHANGELOG URLs are templated)
