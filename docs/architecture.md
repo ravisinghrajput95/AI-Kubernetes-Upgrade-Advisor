@@ -6,7 +6,7 @@
 |---|---|
 | `config` | pydantic-settings tree, env-overridable (`K8S_ADVISOR_*`), validated at startup |
 | `models` | Domain schema: `ClusterSnapshot` (input), `AssessmentReport` (output), `LLMAnalysis` (the only thing the LLM may produce) |
-| `collectors` | kubectl (concurrent, return-code-based) + helm collection → snapshot; save/load for air-gapped flows |
+| `collectors` | kubectl (concurrent, return-code-based) + helm collection + filtered apiserver deprecated-API metrics → snapshot; save/load for air-gapped flows |
 | `analysis` | **Upgrade Analyzer + Compatibility Engine + Risk Engine** — deterministic: API lifecycle, skew policy, cluster profiling, component detection, compat matrices, planner, readiness scoring |
 | `knowledge` | **Knowledge Base + Embedding Service** — source registry, resilient fetcher, structure-aware chunker, pluggable embedders, manifest-versioned store |
 | `retrieval` | **RAG Engine** — BM25 + dense arms, RRF fusion, hard version filtering, MMR, budgeted context assembly |

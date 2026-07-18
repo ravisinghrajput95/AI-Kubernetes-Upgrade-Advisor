@@ -11,6 +11,7 @@ removals that affect real workloads from 1.16 through 1.33.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from ..models import (
@@ -394,6 +395,37 @@ def removals_in_range(source: KubeVersion, target: KubeVersion) -> list[APIRemov
     return hits
 
 
+_DEPRECATED_METRIC_RE = re.compile(r"^apiserver_requested_deprecated_apis\{([^}]*)\}\s")
+_LABEL_RE = re.compile(r'(\w+)="([^"]*)"')
+
+
+def parse_requested_deprecated_apis(snapshot: ClusterSnapshot) -> dict[str, set[str]] | None:
+    """Parse ``apiserver_requested_deprecated_apis`` series into
+    {group/version: {resources}}. Returns None when the metric was not
+    collected (no RBAC, old snapshot) — callers must distinguish
+    "no usage observed" from "no visibility".
+
+    The metric counts requests since the apiserver started, so absence of a
+    series means *not requested recently*, not *never used* — findings word
+    it accordingly."""
+    result = snapshot.command("deprecated_api_requests")
+    if not result.ok:
+        return None
+    requested: dict[str, set[str]] = {}
+    for line in result.stdout.splitlines():
+        match = _DEPRECATED_METRIC_RE.match(line.strip())
+        if not match:
+            continue
+        labels = dict(_LABEL_RE.findall(match.group(1)))
+        group = labels.get("group", "")
+        version = labels.get("version", "")
+        if not version:
+            continue
+        gv = f"{group}/{version}" if group else version
+        requested.setdefault(gv, set()).add(labels.get("resource", ""))
+    return requested
+
+
 def _served_group_versions(snapshot: ClusterSnapshot) -> set[str]:
     return {line.strip() for line in snapshot.stdout("api_versions").splitlines() if line.strip()}
 
@@ -402,6 +434,7 @@ def detect_api_removal_findings(
     snapshot: ClusterSnapshot, source: KubeVersion, target: KubeVersion
 ) -> list[Finding]:
     served = _served_group_versions(snapshot)
+    requested = parse_requested_deprecated_apis(snapshot)  # None = no visibility
     findings: list[Finding] = []
 
     for removal in removals_in_range(source, target):
@@ -414,6 +447,11 @@ def detect_api_removal_findings(
         psp_objects = snapshot.command("psp")
         psp_in_use = (
             psp_case and psp_objects.has_output and "No resources" not in psp_objects.stdout
+        )
+        # requested == {} means "metric collected, nothing requested" — a
+        # positive observation, distinct from None ("no visibility").
+        requested_resources = (
+            sorted(requested.get(removal.group_version, set())) if requested is not None else None
         )
 
         kinds = ", ".join(removal.kinds)
@@ -452,13 +490,36 @@ def detect_api_removal_findings(
                     )
                 )
 
+        # The apiserver's own usage metric is the strongest evidence tier:
+        # requested-since-restart escalates to blocking; observed-unused is
+        # explicitly noted (with the restart caveat); no metric = no claim.
+        actively_used = bool(requested_resources)
+        if actively_used:
+            evidence.append(
+                Evidence(
+                    kind="cluster-data",
+                    detail="apiserver_requested_deprecated_apis confirms requests for "
+                    f"{removal.group_version} ({', '.join(requested_resources)}) since the "
+                    "apiserver started — this API is actively used, not merely served.",
+                )
+            )
+        elif requested_resources is not None:
+            evidence.append(
+                Evidence(
+                    kind="cluster-data",
+                    detail=f"No requests for {removal.group_version} observed in "
+                    "apiserver_requested_deprecated_apis. The metric resets on apiserver "
+                    "restart, so treat as 'not recently used', and audit before the hop.",
+                )
+            )
+
         findings.append(
             Finding(
                 id=f"removed-api-{removal.group_version.replace('/', '-').replace('.', '-')}"
                 f"-{removal.kinds[0].lower()}",
                 title=f"{kinds} ({removal.group_version}) removed in {removal.removed_in}",
                 category=FindingCategory.REMOVED_API,
-                severity=Severity.CRITICAL if psp_in_use else Severity.HIGH,
+                severity=Severity.CRITICAL if (psp_in_use or actively_used) else Severity.HIGH,
                 origin=FindingOrigin.DETERMINISTIC,
                 description=(
                     f"The cluster still serves {removal.group_version}, which is removed in "
@@ -472,7 +533,7 @@ def detect_api_removal_findings(
                     + ". Tools like 'pluto detect-all-in-cluster' or 'kubent' find manifests "
                     "pinned to removed versions."
                 ),
-                blocking=psp_in_use,
+                blocking=psp_in_use or actively_used,
                 evidence=evidence,
                 introduced_in=removal.deprecated_in,
                 effective_in=removal.removed_in,

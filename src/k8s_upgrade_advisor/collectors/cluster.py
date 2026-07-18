@@ -182,6 +182,34 @@ def _collect_helm_manifests(
     return manifests
 
 
+def _collect_deprecated_api_metrics(extra: list[str], timeout: float = 45.0) -> CommandResult:
+    """The canonical usage signal for deprecated APIs: the apiserver's
+    ``apiserver_requested_deprecated_apis`` metric records which deprecated
+    group/versions have actually been *requested* since the apiserver
+    started — the difference between "served" (available) and "used"
+    (breaking on removal).
+
+    The raw /metrics payload is megabytes; only the relevant lines are kept
+    so snapshots stay small. Requires GET on the /metrics nonResourceURL
+    (cluster-admin has it); failure just means analyzers fall back to
+    served-only evidence."""
+    result = _run(["kubectl", *extra, "get", "--raw", "/metrics"], timeout)
+    if result.ok:
+        kept = [
+            line
+            for line in result.stdout.splitlines()
+            if line.startswith("apiserver_requested_deprecated_apis")
+        ]
+        result = CommandResult(
+            args=[*result.args[:-2], "--raw", "/metrics (filtered)"],
+            stdout="\n".join(kept),
+            stderr=result.stderr,
+            returncode=result.returncode,
+            duration_ms=result.duration_ms,
+        )
+    return result
+
+
 def collect_cluster_snapshot(
     context: str | None = None,
     kubeconfig: str | None = None,
@@ -200,6 +228,8 @@ def collect_cluster_snapshot(
         }
         for key, future in futures.items():
             results[key] = future.result()
+
+    results["deprecated_api_requests"] = _collect_deprecated_api_metrics(extra, timeout)
 
     helm_releases, helm_available = _collect_helm(context, kubeconfig)
     helm_manifests = _collect_helm_manifests(helm_releases, context, kubeconfig)

@@ -325,3 +325,58 @@ class TestManagedFixtureUnaffected:
 
 def _unused_make_helpers():  # keep conftest helpers imported for future cases
     return base_kubectl, make_nodes_json
+
+
+class TestRequestedDeprecatedApis:
+    """The canonical usage-evidence tier: apiserver_requested_deprecated_apis."""
+
+    METRIC = (
+        'apiserver_requested_deprecated_apis{group="flowcontrol.apiserver.k8s.io",'
+        'removed_release="1.29",resource="flowschemas",subresource="",version="v1beta2"} 1\n'
+        'apiserver_requested_deprecated_apis{group="policy",removed_release="1.25",'
+        'resource="podsecuritypolicies",subresource="",version="v1beta1"} 1'
+    )
+
+    def _snapshot(self, metric_stdout: str | None) -> ClusterSnapshot:
+        kubectl = {
+            "api_versions": _ok("flowcontrol.apiserver.k8s.io/v1beta2"),
+            "psp": CommandResult(stderr="not found", returncode=1),
+            "deployments": _ok(""),
+            "daemonsets": _ok(""),
+            "namespaces": _ok(""),
+        }
+        if metric_stdout is not None:
+            kubectl["deprecated_api_requests"] = _ok(metric_stdout)
+        return ClusterSnapshot(kubectl=kubectl)
+
+    def test_parser_groups_by_gv(self):
+        from k8s_upgrade_advisor.analysis.api_lifecycle import parse_requested_deprecated_apis
+
+        requested = parse_requested_deprecated_apis(self._snapshot(self.METRIC))
+        assert requested == {
+            "flowcontrol.apiserver.k8s.io/v1beta2": {"flowschemas"},
+            "policy/v1beta1": {"podsecuritypolicies"},
+        }
+
+    def test_parser_returns_none_without_metric(self):
+        from k8s_upgrade_advisor.analysis.api_lifecycle import parse_requested_deprecated_apis
+
+        assert parse_requested_deprecated_apis(self._snapshot(None)) is None
+
+    def test_requested_usage_escalates_to_blocking(self):
+        findings = detect_api_removal_findings(self._snapshot(self.METRIC), V("1.28"), V("1.29"))
+        assert len(findings) == 1
+        assert findings[0].severity is Severity.CRITICAL and findings[0].blocking
+        assert any("actively used" in e.detail for e in findings[0].evidence)
+
+    def test_served_but_unrequested_stays_high_with_caveat(self):
+        findings = detect_api_removal_findings(self._snapshot(""), V("1.28"), V("1.29"))
+        assert len(findings) == 1
+        assert findings[0].severity is Severity.HIGH and not findings[0].blocking
+        assert any("resets on apiserver restart" in e.detail for e in findings[0].evidence)
+
+    def test_no_metric_makes_no_usage_claim(self):
+        findings = detect_api_removal_findings(self._snapshot(None), V("1.28"), V("1.29"))
+        assert len(findings) == 1
+        assert findings[0].severity is Severity.HIGH
+        assert not any("apiserver_requested" in e.detail.lower() for e in findings[0].evidence)

@@ -24,7 +24,7 @@ Supports **EKS · GKE · AKS · OpenShift · Rancher (RKE2/k3s) · kubeadm · ki
 - **Honesty as a feature** — missing evidence *caps* readiness; targets beyond the
   reviewed tables trigger an explicit knowledge-horizon cap; LLM grounding is measured
   per assessment, not assumed
-- **189 offline tests in <3s** — no cluster, no network, no LLM needed
+- **194 offline tests in <3s** — no cluster, no network, no LLM needed
 - **Runs as a service** — published container + Helm chart, stateless replicas,
   rate limiting + idempotency + load shedding, shipped SLO alerts, DR runbook
 - **[Example report](examples/eks-1.26-to-1.29.md)** — see the output without running anything
@@ -68,7 +68,8 @@ The trust boundary is enforced *after* the model responds, not by prompt hope.
 ## What it analyzes
 
 - **API lifecycle** — deprecated/removed APIs from 1.16→1.33 (static table, never guessed),
-  detected against what the cluster actually serves; usage evidence upgrades findings to blocking
+  detected against what the cluster serves **and** what it actually requests
+  (`apiserver_requested_deprecated_apis` — served ≠ used); confirmed usage escalates to blocking
 - **Version skew policy** — kubelet and kube-proxy n-2/n-3 windows per hop,
   kube-proxy-newer-than-apiserver violations, multi-hop sequencing constraints
 - **Component compatibility** — CNI (Cilium/Calico/VPC-CNI), CSI drivers, service mesh
@@ -148,7 +149,7 @@ pluggable embeddings with graceful degradation.
 
 ```bash
 pip install -e ".[api,dev]"
-pytest              # 189 offline tests, <3s — no cluster/network/LLM
+pytest              # 194 offline tests, <3s — no cluster/network/LLM
 ruff check src tests
 ```
 
