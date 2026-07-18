@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ── Build stage ──────────────────────────────────────────────────────────────
-FROM python:3.12-slim AS build
+FROM python:3.14-slim AS build
 
 WORKDIR /app
 COPY pyproject.toml README.md ./
@@ -9,7 +9,7 @@ COPY src ./src
 RUN pip install --no-cache-dir --prefix=/install ".[api]"
 
 # ── Runtime stage ────────────────────────────────────────────────────────────
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 LABEL org.opencontainers.image.title="k8s-upgrade-advisor" \
       org.opencontainers.image.description="AI Kubernetes upgrade intelligence platform" \
