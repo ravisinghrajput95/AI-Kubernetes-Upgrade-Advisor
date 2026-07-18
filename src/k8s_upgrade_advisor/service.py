@@ -28,9 +28,30 @@ from .knowledge.store import read_manifest
 from .llm import LLMProvider, NullProvider, make_provider, run_llm_analysis
 from .models import AssessmentReport, ClusterSnapshot, validate_upgrade_pair
 from .observability import get_logger, metrics
+from .observability.tracing import span
 from .retrieval import ContextBundle, HybridRetriever, build_queries
 
 log = get_logger(__name__)
+
+
+class _stage:
+    """Times a pipeline stage into the per-stage histogram and an OTel span."""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def __enter__(self):
+        self._span = span(f"assess.{self.name}")
+        self._span.__enter__()
+        self._started = time.monotonic()
+        return self
+
+    def __exit__(self, *exc_info):
+        metrics.assessment_stage_seconds.labels(stage=self.name).observe(
+            time.monotonic() - self._started
+        )
+        return self._span.__exit__(*exc_info)
+
 
 _cache_lock = threading.Lock()
 _retriever_cache: dict = {"built_at": None, "kb_dir": None, "retriever": None}
@@ -50,10 +71,13 @@ def assess(
     source, target = validate_upgrade_pair(source_version, target_version)
 
     outcome = "failed"
+    metrics.assessments_in_flight.inc()
     try:
-        report = run_deterministic_analysis(snapshot, source, target)
+        with _stage("deterministic"):
+            report = run_deterministic_analysis(snapshot, source, target)
 
-        bundle = _retrieve(report, settings, source, target)
+        with _stage("retrieval"):
+            bundle = _retrieve(report, settings, source, target)
         report.evidence_metrics.kb_chunks_retrieved = len(bundle.entries)
         report.evidence_metrics.kb_sources = len({e.chunk.doc_key for e in bundle.entries})
 
@@ -65,7 +89,10 @@ def assess(
         else:
             provider = _get_provider(settings.llm)
             try:
-                report = run_llm_analysis(report, bundle.context_text, bundle.citations, provider)
+                with _stage("llm"):
+                    report = run_llm_analysis(
+                        report, bundle.context_text, bundle.citations, provider
+                    )
             except LLMError as exc:
                 # Graceful degradation: deterministic report still ships.
                 log.error("llm_stage_failed", error=str(exc)[:300])
@@ -77,6 +104,7 @@ def assess(
             outcome = "completed"
         return report
     finally:
+        metrics.assessments_in_flight.dec()
         metrics.assessments_total.labels(outcome=outcome).inc()
         metrics.assessment_duration_seconds.observe(time.monotonic() - started)
 

@@ -33,6 +33,18 @@ class Metrics:
             buckets=(1, 5, 15, 30, 60, 120, 300, 600),
             registry=self.registry,
         )
+        self.assessment_stage_seconds = Histogram(
+            "advisor_assessment_stage_seconds",
+            "Per-stage assessment latency",
+            ["stage"],  # deterministic | retrieval | llm
+            buckets=(0.1, 0.5, 1, 5, 15, 30, 60, 120, 300),
+            registry=self.registry,
+        )
+        self.assessments_in_flight = Gauge(
+            "advisor_assessments_in_flight",
+            "Assessments currently executing",
+            registry=self.registry,
+        )
         self.llm_requests_total = Counter(
             "advisor_llm_requests_total",
             "LLM API calls, by provider and status",

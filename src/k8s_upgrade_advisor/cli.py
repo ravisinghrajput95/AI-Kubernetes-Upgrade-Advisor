@@ -213,6 +213,7 @@ def _cmd_assess(args, settings) -> int:
             settings.paths.reports_dir,
             markdown_path=Path(args.md) if args.md else None,
             html_path=Path(args.html) if args.html else None,
+            keep=settings.paths.reports_keep,
         )
         for kind, path in written.items():
             print(f"  {kind}: {path}")

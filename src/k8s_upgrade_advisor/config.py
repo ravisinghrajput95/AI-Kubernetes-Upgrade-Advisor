@@ -23,6 +23,10 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 class PathsSettings(BaseModel):
     kb_dir: Path = _REPO_ROOT / "kb"
     reports_dir: Path = _REPO_ROOT / "reports"
+    # Keep the newest N assessments on disk (md+html+json per assessment);
+    # 0 disables pruning. Reports are the durable tier for the API's
+    # disk-backed retrieval, so this is the platform's retention policy.
+    reports_keep: int = Field(200, ge=0)
 
     @property
     def raw_docs_dir(self) -> Path:
@@ -83,6 +87,10 @@ class ServerSettings(BaseModel):
     port: int = Field(8080, ge=1, le=65535)
     max_snapshot_bytes: int = Field(20 * 1024 * 1024, ge=1024)
     request_log: bool = True
+    # Assessments are CPU/LLM-bound and run in the worker threadpool; beyond
+    # this many in flight the API sheds load with 503 + Retry-After instead
+    # of queueing until the pool starves.
+    max_concurrent_assessments: int = Field(4, ge=1, le=64)
 
 
 class ObservabilitySettings(BaseModel):

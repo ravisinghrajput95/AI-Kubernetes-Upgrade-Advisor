@@ -109,6 +109,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     store = _ReportStore(settings)
     frontend_html = _load_frontend()
+    # Load shedding: assessments are minutes-long threadpool work; beyond
+    # the configured concurrency the API answers 503 immediately rather than
+    # queueing requests until the worker pool starves. Exposed on app.state
+    # so tests can saturate it deterministically.
+    app.state.assessment_slots = threading.BoundedSemaphore(
+        settings.server.max_concurrent_assessments
+    )
 
     if settings.observability.otel_enabled:
         _try_enable_otel(app, settings)
@@ -175,6 +182,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # ── Assessments ──────────────────────────────────────────────────────
     @app.post("/api/v1/assessments", response_model=AssessmentReport)
     def create_assessment(request: AssessRequest) -> AssessmentReport:
+        if not app.state.assessment_slots.acquire(blocking=False):
+            raise HTTPException(
+                status_code=503,
+                detail=f"assessment capacity saturated "
+                f"({settings.server.max_concurrent_assessments} in flight); retry shortly",
+                headers={"Retry-After": "30"},
+            )
         try:
             report = assess(
                 request.snapshot,
@@ -187,8 +201,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except AdvisorError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
+        finally:
+            app.state.assessment_slots.release()
         store.add(report)
-        save_reports(report, settings.paths.reports_dir)
+        save_reports(report, settings.paths.reports_dir, keep=settings.paths.reports_keep)
         return report
 
     @app.get("/api/v1/assessments", response_model=list[AssessmentSummary])

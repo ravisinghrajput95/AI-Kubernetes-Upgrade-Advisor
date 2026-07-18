@@ -74,6 +74,8 @@ Common ones:
 | `K8S_ADVISOR_KNOWLEDGE__EMBEDDING_BACKEND` | `auto` | `sentence-transformers` / `hash` |
 | `K8S_ADVISOR_RETRIEVAL__TOP_K` | `24` | Chunks handed to the LLM |
 | `K8S_ADVISOR_PATHS__KB_DIR` | `./kb` | Knowledge base location |
+| `K8S_ADVISOR_SERVER__MAX_CONCURRENT_ASSESSMENTS` | `4` | In-flight assessment limit (503 beyond it) |
+| `K8S_ADVISOR_PATHS__REPORTS_KEEP` | `200` | Report retention (assessments kept on disk, 0 = unlimited) |
 | `K8S_ADVISOR_OBSERVABILITY__LOG_JSON` | `false` | JSON logs |
 | `K8S_ADVISOR_OBSERVABILITY__OTEL_ENABLED` | `false` | OTLP tracing (extra `[otel]`) |
 | `OPENAI_API_KEY` | — | LLM credential |
@@ -82,6 +84,7 @@ Common ones:
 
 Prometheus metrics at `/metrics`:
 `advisor_assessments_total{outcome}` · `advisor_assessment_duration_seconds` ·
+`advisor_assessment_stage_seconds{stage}` · `advisor_assessments_in_flight` ·
 `advisor_llm_requests_total{provider,status}` · `advisor_llm_request_seconds` ·
 `advisor_retrieval_seconds` · `advisor_kb_chunks` ·
 `advisor_kb_build_timestamp_seconds` (alert on staleness) ·
