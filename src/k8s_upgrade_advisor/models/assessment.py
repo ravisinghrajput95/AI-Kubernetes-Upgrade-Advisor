@@ -237,6 +237,10 @@ class LLMMetadata(BaseModel):
     completion_chars: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+    # Fraction of substantive narrative sentences carrying a [DOC n] citation
+    # — measured post-merge, not promised by the prompt.
+    grounding_ratio: float = 0.0
     duration_ms: int = 0
     dry_run: bool = False
 

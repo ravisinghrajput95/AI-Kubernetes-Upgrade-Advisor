@@ -55,13 +55,42 @@ CITATIONS = [Citation(ref=1, title="doc one", url="https://x/1")]
 
 
 class TestTrustBoundary:
-    def test_llm_findings_demoted_and_never_blocking(self, report):
+    def test_ungrounded_llm_finding_demoted_to_low(self, report):
+        # The payload's finding cites nothing — speculation lands at LOW.
         provider = FakeProvider([analysis_payload()])
         merged = run_llm_analysis(report, "ctx", CITATIONS, provider)
         added = [f for f in merged.findings if f.id == "llm-guess"]
         assert added[0].origin is FindingOrigin.LLM
         assert added[0].blocking is False
-        assert added[0].severity is Severity.HIGH  # demoted from critical
+        assert added[0].severity is Severity.LOW
+        assert added[0].description.startswith("[ungrounded")
+
+    def test_grounded_llm_finding_capped_at_high(self, report):
+        provider = FakeProvider(
+            [
+                analysis_payload(
+                    additional_findings=[
+                        {
+                            "id": "llm-grounded",
+                            "title": "Document-backed critical claim",
+                            "category": "observation",
+                            "severity": "critical",
+                            "origin": "llm",
+                            "description": "supported by a retrieved doc",
+                            "blocking": True,
+                            "evidence": [
+                                {"kind": "kb-document", "detail": "see doc", "citation_refs": [1]}
+                            ],
+                        }
+                    ]
+                )
+            ]
+        )
+        merged = run_llm_analysis(report, "ctx", CITATIONS, provider)
+        added = [f for f in merged.findings if f.id == "llm-grounded"]
+        assert added[0].severity is Severity.HIGH  # demoted from critical, kept HIGH
+        assert added[0].blocking is False
+        assert "[ungrounded" not in added[0].description
 
     def test_scores_unchanged_by_llm(self, report):
         before = (report.readiness.score, report.readiness.verdict)

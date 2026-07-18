@@ -30,6 +30,7 @@ from .models import AssessmentReport, ClusterSnapshot, validate_upgrade_pair
 from .observability import get_logger, metrics
 from .observability.tracing import span
 from .retrieval import ContextBundle, HybridRetriever, build_queries
+from .retrieval.rerank import select_reranker
 
 log = get_logger(__name__)
 
@@ -127,7 +128,8 @@ def _get_retriever(settings: Settings) -> HybridRetriever | None:
             settings.knowledge.embedding_backend, settings.knowledge.embedding_model
         )
         store = KnowledgeStore.load(settings.paths.kb_dir, expected_embedder=embedder.name)
-        retriever = HybridRetriever(store, embedder, settings.retrieval)
+        reranker = select_reranker(settings.retrieval.rerank)
+        retriever = HybridRetriever(store, embedder, settings.retrieval, reranker=reranker)
         _retriever_cache.update(
             built_at=manifest.built_at, kb_dir=str(settings.paths.kb_dir), retriever=retriever
         )
@@ -162,4 +164,13 @@ def _retrieve(report: AssessmentReport, settings: Settings, source, target) -> C
     queries = build_queries(source, target, report.profile)
     allowed = {source.minor_str, *[v.minor_str for v in source.minors_until(target)]}
     installed = {component.key for component in report.profile.components}
-    return retriever.retrieve(queries, allowed_versions=allowed, installed_components=installed)
+    rerank_query = (
+        f"Kubernetes {source.minor_str} to {target.minor_str} upgrade breaking changes "
+        f"compatibility {' '.join(sorted(installed))}".strip()
+    )
+    return retriever.retrieve(
+        queries,
+        allowed_versions=allowed,
+        installed_components=installed,
+        rerank_query=rerank_query,
+    )

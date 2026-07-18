@@ -192,10 +192,19 @@ def render_markdown(report: AssessmentReport) -> str:
     )
     add(f"- Component versions resolved: {em.components_with_versions}/{em.components_detected}")
     add(f"- KB chunks retrieved: {em.kb_chunks_retrieved} from {em.kb_sources} documents")
-    add(
-        f"- LLM: {report.llm.provider}/{report.llm.model}"
-        + (" (dry run)" if report.llm.dry_run else "")
+    llm_line = f"- LLM: {report.llm.provider}/{report.llm.model}" + (
+        " (dry run)" if report.llm.dry_run else ""
     )
+    if report.llm.prompt_tokens:
+        llm_line += f" · {report.llm.prompt_tokens}+{report.llm.completion_tokens} tokens"
+    if report.llm.estimated_cost_usd:
+        llm_line += f" · ~${report.llm.estimated_cost_usd:.4f}"
+    add(llm_line)
+    if not report.llm.dry_run and report.llm.provider != "none":
+        add(
+            f"- Narrative grounding: {report.llm.grounding_ratio:.0%} of substantive "
+            "sentences carry a [DOC n] citation"
+        )
     add("")
     add("---")
     add(

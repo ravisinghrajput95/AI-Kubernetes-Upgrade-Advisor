@@ -55,6 +55,13 @@ Design notes:
   dropped regardless of similarity.
 - **Why MMR**: CHANGELOG chunks are highly self-similar; without diversification
   they crowd out operator compat docs.
+- **Optional cross-encoder reranking** (`retrieval.rerank=auto|cross-encoder`,
+  `[rag]` extra): RRF ranks by rank position, never by direct query-document
+  relevance; a cross-encoder rescores the fused top-N jointly. Same
+  degradation contract as embeddings — absent dependency means a logged no-op.
+- **Lost-in-the-middle mitigation**: context packs the strongest chunks at
+  both edges of the window (models attend most to start and end); [DOC n]
+  numbers follow presentation order and are labels, not ranks.
 - **Citations**: `[DOC n]` numbering is assigned at assembly and returned alongside
   the context; the merge step discards any model citation not in that set.
 
@@ -65,3 +72,10 @@ deterministic findings or `[DOC n]`; scores are fixed inputs to explain; unknown
 must be called unknown. The *enforced* part lives in `llm/advisor.py` — the schema,
 the demotion rules, and citation validation — because a contract you can't enforce
 is a wish.
+
+Grounding is also **measured**, not just demanded: every assessment records a
+`grounding_ratio` (fraction of substantive narrative sentences carrying a
+`[DOC n]` citation) into the report metadata and the
+`advisor_llm_grounding_ratio` histogram, and model findings with no valid
+citations are demoted to LOW and labelled `[ungrounded]`. Every production run
+doubles as an eval sample.

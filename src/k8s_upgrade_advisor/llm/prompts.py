@@ -13,8 +13,27 @@ Grounding contract given to the model:
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from ..models import AssessmentReport, LLMAnalysis
+
+
+def _compact(schema: Any, in_properties: bool = False) -> Any:
+    """Strip pydantic's auto-generated "title" metadata keys — pure token
+    noise for the model (field names carry the information). Keys directly
+    under a "properties" dict are field *names* (a model may legitimately
+    have a field called "title", as Finding does) and are never filtered."""
+    if isinstance(schema, dict):
+        out = {}
+        for key, value in schema.items():
+            if not in_properties and key == "title":
+                continue
+            out[key] = _compact(value, in_properties=(key == "properties"))
+        return out
+    if isinstance(schema, list):
+        return [_compact(item) for item in schema]
+    return schema
+
 
 SYSTEM_PROMPT = """\
 You are a principal Kubernetes platform engineer writing the narrative and \
@@ -76,7 +95,7 @@ def build_user_prompt(report: AssessmentReport, context_text: str) -> str:
         or "- no node inventory"
     )
 
-    schema = json.dumps(LLMAnalysis.model_json_schema(), indent=None)
+    schema = json.dumps(_compact(LLMAnalysis.model_json_schema()), indent=None)
 
     return f"""\
 ## UPGRADE REQUEST

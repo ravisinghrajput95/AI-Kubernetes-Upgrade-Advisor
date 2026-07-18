@@ -63,6 +63,18 @@ class Metrics:
             ["provider", "direction"],
             registry=self.registry,
         )
+        self.llm_cost_usd_total = Counter(
+            "advisor_llm_cost_usd_total",
+            "Estimated LLM spend in USD (requires configured token prices)",
+            ["provider"],
+            registry=self.registry,
+        )
+        self.llm_grounding_ratio = Histogram(
+            "advisor_llm_grounding_ratio",
+            "Fraction of narrative sentences carrying document citations",
+            buckets=(0.1, 0.25, 0.5, 0.75, 0.9, 1.0),
+            registry=self.registry,
+        )
         self.build_info = Gauge(
             "advisor_build_info",
             "Build/version info (value is always 1)",

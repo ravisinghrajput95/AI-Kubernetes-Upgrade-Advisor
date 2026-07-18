@@ -93,6 +93,7 @@ class HybridRetriever:
         store: KnowledgeStore,
         embedder: EmbeddingBackend,
         settings: RetrievalSettings,
+        reranker=None,
     ) -> None:
         if embedder.name != store.manifest.embedder:
             # Store.load() also guards this; re-check because retriever can be
@@ -101,6 +102,7 @@ class HybridRetriever:
         self.store = store
         self.embedder = embedder
         self.settings = settings
+        self.reranker = reranker
         self._bm25 = BM25([chunk.text for chunk in store.chunks])
 
     # ── Core pipeline ────────────────────────────────────────────────────
@@ -110,10 +112,12 @@ class HybridRetriever:
         queries: list[str],
         allowed_versions: set[str],
         installed_components: set[str],
+        rerank_query: str | None = None,
     ) -> ContextBundle:
         started = time.monotonic()
         fused = self._fuse_rankings(queries)
         filtered = self._metadata_filter(fused, allowed_versions, installed_components)
+        filtered = self._rerank(filtered, rerank_query or " ".join(queries[:3]))
         selected = self._mmr(filtered, self.settings.top_k)
         bundle = self._assemble(selected)
         metrics.retrieval_seconds.observe(time.monotonic() - started)
@@ -123,8 +127,33 @@ class HybridRetriever:
             candidates=len(fused),
             after_filter=len(filtered),
             selected=len(bundle.entries),
+            reranked=getattr(self.reranker, "name", "none") != "none",
         )
         return bundle
+
+    def _rerank(self, ranked: list[tuple[int, float]], query: str) -> list[tuple[int, float]]:
+        """Cross-encoder rescoring of the fused top-N. RRF ranks by rank
+        position; the cross-encoder scores actual query-document relevance.
+        Reranked candidates keep positions above the untouched tail."""
+        if self.reranker is None or not ranked:
+            return ranked
+        head = ranked[: self.settings.rerank_candidates]
+        scores = self.reranker.scores(query, [self.store.chunks[i].text for i, _ in head])
+        if scores is None:  # stage unavailable (null reranker) — no-op
+            return ranked
+        floor = min(score for _, score in head)
+        # Normalise cross-encoder scores into a band above the tail so the
+        # MMR relevance term stays meaningful across the seam.
+        lo, hi = min(scores), max(scores)
+        span = (hi - lo) or 1.0
+        reranked = sorted(
+            (
+                (index, floor + 0.001 + (score - lo) / span)
+                for (index, _old), score in zip(head, scores, strict=True)
+            ),
+            key=lambda pair: -pair[1],
+        )
+        return reranked + ranked[len(head) :]
 
     def _fuse_rankings(self, queries: list[str]) -> dict[int, float]:
         """Reciprocal Rank Fusion over every (query, arm) ranking:
@@ -197,13 +226,20 @@ class HybridRetriever:
     def _assemble(self, selected: list[tuple[int, float]]) -> ContextBundle:
         """Number chunks as [DOC n] and pack them under the char budget.
         Compression strategy: whole chunks first; once the budget tightens,
-        truncate the tail chunk rather than dropping it entirely."""
+        truncate the tail chunk rather than dropping it entirely.
+
+        Ordering counters the lost-in-the-middle effect: models attend most
+        to the start and end of long contexts, so the strongest chunks are
+        placed at both edges (1st, 3rd, 5th … then … 6th, 4th, 2nd) and the
+        weakest land in the middle. [DOC n] refs follow presentation order —
+        the numbers are labels, not ranks."""
+        arranged = selected[0::2] + list(reversed(selected[1::2]))
         budget = self.settings.max_context_chars
         entries: list[RetrievedChunk] = []
         parts: list[str] = []
         used = 0
 
-        for ref, (index, score) in enumerate(selected, start=1):
+        for ref, (index, score) in enumerate(arranged, start=1):
             chunk = self.store.chunks[index]
             header = (
                 f"[DOC {ref}] {chunk.display_source}"

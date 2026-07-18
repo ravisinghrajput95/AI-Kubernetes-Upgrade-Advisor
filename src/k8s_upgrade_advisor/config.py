@@ -55,6 +55,11 @@ class KnowledgeSettings(BaseModel):
 
 class RetrievalSettings(BaseModel):
     top_k: int = Field(24, ge=1, le=200, description="chunks handed to the LLM")
+    # Cross-encoder rerank of fused candidates. "none" (default) skips it;
+    # "auto" uses it when sentence-transformers is installed; "cross-encoder"
+    # requires it. Same graceful-degradation contract as embeddings.
+    rerank: Literal["none", "auto", "cross-encoder"] = "none"
+    rerank_candidates: int = Field(30, ge=1, le=200)
     dense_candidates: int = Field(50, ge=1)
     lexical_candidates: int = Field(50, ge=1)
     rrf_k: int = Field(60, ge=1, description="reciprocal-rank-fusion constant")
@@ -74,6 +79,10 @@ class LLMSettings(BaseModel):
     circuit_failure_threshold: int = Field(5, ge=1)
     circuit_reset_seconds: float = Field(60.0, gt=0)
     temperature: float = Field(0.1, ge=0.0, le=2.0)
+    # Optional cost accounting (USD per 1k tokens). 0 disables estimation —
+    # prices change too often to hardcode.
+    prompt_cost_per_1k: float = Field(0.0, ge=0.0)
+    completion_cost_per_1k: float = Field(0.0, ge=0.0)
 
     @model_validator(mode="after")
     def _https_only(self) -> LLMSettings:

@@ -73,6 +73,9 @@ Common ones:
 | `K8S_ADVISOR_LLM__PROVIDER` | `openai` | `none` disables the LLM stage |
 | `K8S_ADVISOR_KNOWLEDGE__EMBEDDING_BACKEND` | `auto` | `sentence-transformers` / `hash` |
 | `K8S_ADVISOR_RETRIEVAL__TOP_K` | `24` | Chunks handed to the LLM |
+| `K8S_ADVISOR_RETRIEVAL__RERANK` | `none` | Cross-encoder rerank: `none`/`auto`/`cross-encoder` |
+| `K8S_ADVISOR_LLM__PROMPT_COST_PER_1K` | `0` | USD per 1k prompt tokens (enables cost accounting) |
+| `K8S_ADVISOR_LLM__COMPLETION_COST_PER_1K` | `0` | USD per 1k completion tokens |
 | `K8S_ADVISOR_PATHS__KB_DIR` | `./kb` | Knowledge base location |
 | `K8S_ADVISOR_SERVER__MAX_CONCURRENT_ASSESSMENTS` | `4` | In-flight assessment limit (503 beyond it) |
 | `K8S_ADVISOR_PATHS__REPORTS_KEEP` | `200` | Report retention (assessments kept on disk, 0 = unlimited) |
@@ -85,6 +88,7 @@ Common ones:
 Prometheus metrics at `/metrics`:
 `advisor_assessments_total{outcome}` · `advisor_assessment_duration_seconds` ·
 `advisor_assessment_stage_seconds{stage}` · `advisor_assessments_in_flight` ·
+`advisor_llm_cost_usd_total{provider}` · `advisor_llm_grounding_ratio` ·
 `advisor_llm_requests_total{provider,status}` · `advisor_llm_request_seconds` ·
 `advisor_retrieval_seconds` · `advisor_kb_chunks` ·
 `advisor_kb_build_timestamp_seconds` (alert on staleness) ·

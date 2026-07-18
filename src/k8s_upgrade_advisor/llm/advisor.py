@@ -14,6 +14,7 @@ hope):
 
 from __future__ import annotations
 
+import re
 import time
 
 from pydantic import ValidationError
@@ -27,7 +28,7 @@ from ..models import (
     LLMMetadata,
     Severity,
 )
-from ..observability import get_logger
+from ..observability import get_logger, metrics
 from .prompts import SYSTEM_PROMPT, build_user_prompt
 from .provider import LLMProvider, parse_json_response
 
@@ -68,6 +69,7 @@ def run_llm_analysis(
     if usage:
         report.llm.prompt_tokens = usage.get("prompt_tokens", 0)
         report.llm.completion_tokens = usage.get("completion_tokens", 0)
+        report.llm.estimated_cost_usd = round(usage.get("cost_usd", 0.0), 6)
 
     _merge(report, analysis, citations)
     return report
@@ -98,6 +100,10 @@ def _merge(report: AssessmentReport, analysis: LLMAnalysis, citations: list[Cita
     report.risk_narrative = analysis.risk_narrative
 
     # ── Findings: append-only, demoted trust ─────────────────────────────
+    # A model finding earns at most HIGH — and only when it cites retrieved
+    # documents. Citation-less model findings are speculation: demoted to
+    # LOW and labelled, never silently trusted.
+    valid_refs = {c.ref for c in citations}
     existing_ids = {f.id for f in report.findings}
     added = 0
     for finding in analysis.additional_findings:
@@ -107,6 +113,14 @@ def _merge(report: AssessmentReport, analysis: LLMAnalysis, citations: list[Cita
         finding.blocking = False
         if finding.severity is Severity.CRITICAL:
             finding.severity = Severity.HIGH
+        grounded = any(
+            ref in valid_refs for evidence in finding.evidence for ref in evidence.citation_refs
+        )
+        if not grounded and finding.severity.rank < Severity.LOW.rank:
+            finding.severity = Severity.LOW
+            finding.description = (
+                "[ungrounded — model reasoning without document citations] " + finding.description
+            )
         report.findings.append(finding)
         added += 1
 
@@ -139,7 +153,6 @@ def _merge(report: AssessmentReport, analysis: LLMAnalysis, citations: list[Cita
     # ── Citations: keep only refs the model actually used ────────────────
     # An empty result stays empty — attaching unused citations would imply
     # grounding that never happened.
-    valid_refs = {c.ref for c in citations}
     used = [ref for ref in analysis.citations_used if ref in valid_refs]
     dropped = set(analysis.citations_used) - set(used)
     if dropped:
@@ -148,12 +161,39 @@ def _merge(report: AssessmentReport, analysis: LLMAnalysis, citations: list[Cita
         log.warning("llm_no_citations_used", retrieved=len(citations))
     report.citations = [c for c in citations if c.ref in used]
 
+    report.llm.grounding_ratio = _grounding_ratio(
+        f"{report.executive_summary} {report.risk_narrative}"
+    )
+    metrics.llm_grounding_ratio.observe(report.llm.grounding_ratio)
+    if citations and report.llm.grounding_ratio < 0.2:
+        log.warning(
+            "llm_low_grounding",
+            ratio=report.llm.grounding_ratio,
+            hint="narrative barely cites retrieved documents",
+        )
+
     log.info(
         "llm_merge_complete",
         added_findings=added,
         plan_steps=len(report.plan.steps),
         citations_used=len(used),
+        grounding_ratio=report.llm.grounding_ratio,
     )
+
+
+_SENTENCE_RE = re.compile(r"(?<=[.!?])\s+")
+
+
+def _grounding_ratio(narrative: str) -> float:
+    """Fraction of substantive narrative sentences carrying a [DOC n]
+    citation. Measured, not promised: the number lands in the report's
+    evidence appendix and a histogram, so grounding regressions are visible
+    instead of assumed away."""
+    sentences = [s for s in _SENTENCE_RE.split(narrative) if len(s.strip()) >= 40]
+    if not sentences:
+        return 0.0
+    cited = sum(1 for s in sentences if "[DOC" in s)
+    return round(cited / len(sentences), 3)
 
 
 def _union(base: list[str], extra: list[str]) -> list[str]:

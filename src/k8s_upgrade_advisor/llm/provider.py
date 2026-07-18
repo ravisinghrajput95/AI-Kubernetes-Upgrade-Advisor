@@ -126,14 +126,23 @@ class OpenAIProvider:
                 log.warning("llm_truncated", hint="raise llm.max_output_tokens")
             usage = data.get("usage") or {}
             if usage:
+                prompt_tokens = int(usage.get("prompt_tokens", 0))
+                completion_tokens = int(usage.get("completion_tokens", 0))
+                cost = (
+                    prompt_tokens / 1000 * self.settings.prompt_cost_per_1k
+                    + completion_tokens / 1000 * self.settings.completion_cost_per_1k
+                )
                 self.last_usage = {
-                    "prompt_tokens": int(usage.get("prompt_tokens", 0)),
-                    "completion_tokens": int(usage.get("completion_tokens", 0)),
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "cost_usd": cost,
                 }
                 for direction in ("prompt", "completion"):
                     metrics.llm_tokens_total.labels(provider=self.name, direction=direction).inc(
                         self.last_usage[f"{direction}_tokens"]
                     )
+                if cost > 0:
+                    metrics.llm_cost_usd_total.labels(provider=self.name).inc(cost)
             return choice["message"]["content"]
 
         return _once()
