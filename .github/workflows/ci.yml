@@ -5,6 +5,10 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
+  schedule:
+    # Weekly bit-rot canary: catches dependency breakage and dead upstream
+    # doc URLs before a visitor clones the repo and hits them.
+    - cron: "0 6 * * 1"
 
 permissions:
   contents: read

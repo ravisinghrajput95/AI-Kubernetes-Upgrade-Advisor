@@ -30,3 +30,6 @@ venv/
 .idea/
 *.swp
 .DS_Store
+
+# Personal prep material — never committed
+INTERVIEW_PREP.md
