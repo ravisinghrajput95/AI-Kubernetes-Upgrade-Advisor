@@ -133,6 +133,9 @@ Full architecture, sequence diagrams, and decision records: [`docs/`](docs/).
   optional OpenTelemetry tracing
 - **Honest scoring** — missing evidence *caps* readiness and lowers confidence; it can
   never raise a score. Every cap ships with its reason.
+- **Run it as a service** — rate limiting, idempotent submissions, load shedding,
+  stateless replicas over a shared volume, shipped SLO alerts, and a DR story where
+  worst-case recovery is a 15-minute rebuild: see [docs/operations.md](docs/operations.md).
 
 ## Development
 

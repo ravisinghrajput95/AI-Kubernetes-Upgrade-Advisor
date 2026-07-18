@@ -1,0 +1,63 @@
+{{- if .Values.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "advisor.fullname" . }}
+  labels: {{- include "advisor.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: k8s-upgrade-advisor.slo
+      rules:
+        - alert: AdvisorHighErrorRate
+          expr: |
+            sum(rate(advisor_http_requests_total{status=~"5.."}[10m]))
+              / sum(rate(advisor_http_requests_total[10m])) > {{ .Values.prometheusRule.http5xxRatio }}
+          for: 10m
+          labels: {severity: page}
+          annotations:
+            summary: "advisor API 5xx ratio above availability SLO"
+            runbook: "docs/operations.md#alert-advisorhigherrorrate"
+        - alert: AdvisorAssessmentFailures
+          expr: |
+            sum(rate(advisor_assessments_total{outcome="failed"}[15m])) > 0
+              and sum(rate(advisor_assessments_total{outcome="failed"}[15m]))
+              / sum(rate(advisor_assessments_total[15m])) > 0.1
+          for: 15m
+          labels: {severity: page}
+          annotations:
+            summary: ">10% of assessments failing"
+            runbook: "docs/operations.md#alert-advisorassessmentfailures"
+        - alert: AdvisorLLMDegraded
+          expr: |
+            sum(rate(advisor_llm_requests_total{status!="ok"}[15m]))
+              / sum(rate(advisor_llm_requests_total[15m])) > {{ .Values.prometheusRule.llmErrorRatio }}
+          for: 15m
+          labels: {severity: ticket}
+          annotations:
+            summary: "LLM dependency burning error budget (reports degrade to deterministic-only)"
+            runbook: "docs/operations.md#alert-advisorllmdegraded"
+        - alert: AdvisorAssessmentLatencyP95
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(advisor_assessment_duration_seconds_bucket[15m])) by (le))
+              > {{ .Values.prometheusRule.p95LatencySeconds }}
+          for: 15m
+          labels: {severity: ticket}
+          annotations:
+            summary: "assessment p95 latency above SLO"
+            runbook: "docs/operations.md#alert-advisorassessmentlatencyp95"
+        - alert: AdvisorSaturationSustained
+          expr: avg_over_time(advisor_assessments_in_flight[15m]) >= {{ .Values.env.K8S_ADVISOR_SERVER__MAX_CONCURRENT_ASSESSMENTS | default 4 }}
+          for: 15m
+          labels: {severity: ticket}
+          annotations:
+            summary: "assessment capacity saturated for 15m — scale out or raise concurrency"
+            runbook: "docs/operations.md#alert-advisorsaturationsustained"
+        - alert: AdvisorKnowledgeBaseStale
+          expr: time() - advisor_kb_build_timestamp_seconds > {{ .Values.prometheusRule.kbMaxAgeDays }} * 86400
+          for: 1h
+          labels: {severity: ticket}
+          annotations:
+            summary: "knowledge base older than freshness SLO — grounding quality decays"
+            runbook: "docs/operations.md#alert-advisorknowledgebasestale"
+{{- end }}

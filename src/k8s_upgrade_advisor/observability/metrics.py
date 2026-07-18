@@ -75,6 +75,12 @@ class Metrics:
             buckets=(0.1, 0.25, 0.5, 0.75, 0.9, 1.0),
             registry=self.registry,
         )
+        self.assessment_cache_total = Counter(
+            "advisor_assessment_cache_total",
+            "Idempotency cache lookups for assessment submissions",
+            ["result"],  # hit | miss
+            registry=self.registry,
+        )
         self.build_info = Gauge(
             "advisor_build_info",
             "Build/version info (value is always 1)",

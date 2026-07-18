@@ -40,6 +40,29 @@ serviceMonitor:
   enabled: false
   interval: 30s
 
+# SLO-based Prometheus alerts (requires the prometheus-operator CRDs).
+prometheusRule:
+  enabled: false
+  # Tune to your error budgets; expressions live in templates/prometheusrule.yaml
+  http5xxRatio: 0.05          # availability SLO: <5% server errors over 10m
+  llmErrorRatio: 0.2          # LLM dependency error budget over 15m
+  p95LatencySeconds: 300      # assessment latency SLO
+  kbMaxAgeDays: 30            # KB freshness
+
+# In-flight assessments can run up to the LLM timeout (300s); give them time
+# to finish on shutdown instead of dropping work mid-assessment.
+terminationGracePeriodSeconds: 330
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
 podAnnotations: {}
 nodeSelector: {}
 tolerations: []

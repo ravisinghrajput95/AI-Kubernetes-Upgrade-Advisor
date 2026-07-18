@@ -78,6 +78,8 @@ Common ones:
 | `K8S_ADVISOR_LLM__COMPLETION_COST_PER_1K` | `0` | USD per 1k completion tokens |
 | `K8S_ADVISOR_PATHS__KB_DIR` | `./kb` | Knowledge base location |
 | `K8S_ADVISOR_SERVER__MAX_CONCURRENT_ASSESSMENTS` | `4` | In-flight assessment limit (503 beyond it) |
+| `K8S_ADVISOR_SERVER__RATE_LIMIT_PER_MINUTE` | `120` | Assessment POST rate limit, 429 beyond it (0 = off) |
+| `K8S_ADVISOR_SERVER__IDEMPOTENCY_TTL_SECONDS` | `300` | Identical submissions return the cached report (0 = off) |
 | `K8S_ADVISOR_PATHS__REPORTS_KEEP` | `200` | Report retention (assessments kept on disk, 0 = unlimited) |
 | `K8S_ADVISOR_OBSERVABILITY__LOG_JSON` | `false` | JSON logs |
 | `K8S_ADVISOR_OBSERVABILITY__OTEL_ENABLED` | `false` | OTLP tracing (extra `[otel]`) |
@@ -94,5 +96,7 @@ Prometheus metrics at `/metrics`:
 `advisor_kb_build_timestamp_seconds` (alert on staleness) ·
 `advisor_doc_fetches_total{status}` · `advisor_http_*`.
 
-Suggested alerts: KB older than 30d; LLM error-rate > 20% over 15m; readiness
-endpoint flapping.
+Shipped alerts: enable `prometheusRule.enabled=true` in the chart for
+SLO-based rules (error rate, assessment failures, LLM degradation, p95
+latency, saturation, KB staleness). SLO definitions, capacity model, and
+the alert runbook live in [operations.md](operations.md).

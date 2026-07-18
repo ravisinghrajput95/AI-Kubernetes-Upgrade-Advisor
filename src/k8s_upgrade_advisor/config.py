@@ -100,6 +100,15 @@ class ServerSettings(BaseModel):
     # this many in flight the API sheds load with 503 + Retry-After instead
     # of queueing until the pool starves.
     max_concurrent_assessments: int = Field(4, ge=1, le=64)
+    # Token-bucket rate limit for assessment POSTs (requests/minute, bucket
+    # capacity = one minute's quota). 0 disables. Protects the LLM budget
+    # from runaway clients; concurrency shedding alone bounds parallelism,
+    # not request rate.
+    rate_limit_per_minute: int = Field(120, ge=0)
+    # Identical (snapshot, versions, dry_run) submissions within this window
+    # return the cached report instead of re-running the pipeline — CI retry
+    # storms should not multiply LLM spend. 0 disables.
+    idempotency_ttl_seconds: int = Field(300, ge=0)
 
 
 class ObservabilitySettings(BaseModel):
