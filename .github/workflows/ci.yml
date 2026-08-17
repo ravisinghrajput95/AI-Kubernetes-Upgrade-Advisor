@@ -133,7 +133,7 @@ jobs:
             --snapshot tests/fixtures/eks_1_26.json \
             --dry-run --fail-on never \
             --md example-report.md --html example-report.html
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: example-assessment
           path: example-report.*
