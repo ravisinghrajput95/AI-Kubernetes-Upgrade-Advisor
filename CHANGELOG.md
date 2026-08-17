@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-08-17
+
+Security-hardening pass across the API surface, the supply chain, and CI.
+
+### Added
+- **Optional API authentication** — set `K8S_ADVISOR_SERVER__API_KEY` to require
+  `X-API-Key: <key>` or `Authorization: Bearer <key>` on every `/api/*` request
+  (constant-time comparison). Health, `/metrics`, and the UI stay open for
+  probes/scrapers. Unset by default, so trusted-network deployments are
+  unchanged.
+- **Optional CORS allow-list** — `K8S_ADVISOR_SERVER__CORS_ALLOW_ORIGINS` attaches
+  `CORSMiddleware` only for explicitly named origins (never a wildcard); empty by
+  default, so the API stays same-origin.
+- **CI security scanning** — `pip-audit` dependency CVE job (warn-only), Trivy
+  image scan with SARIF upload to the Security tab (reports HIGH/CRITICAL,
+  `ignore-unfixed`, non-gating), and a weekly CodeQL `security-and-quality`
+  workflow.
+- **Coverage gate** — `pytest --cov` in CI with an 80% floor
+  (`[tool.coverage.report] fail_under`); current coverage ~86%.
+
+### Changed
+- The document fetcher now rejects any non-`https://` source URL before making a
+  request (defence in depth on top of the curated HTTPS allow-list), since
+  fetched content feeds the RAG corpus.
+
 ## [2.3.0] - 2026-08-17
 
 Knowledge-horizon refresh to the current Kubernetes support line (1.34–1.36) plus
@@ -73,7 +98,8 @@ the previously untagged deprecated-API usage evidence.
 ### Added
 - Initial release of the AI Kubernetes Upgrade Advisor.
 
-[Unreleased]: https://github.com/ravisinghrajput95/k8s-upgrade-advisor/compare/v2.3.0...HEAD
+[Unreleased]: https://github.com/ravisinghrajput95/k8s-upgrade-advisor/compare/v2.4.0...HEAD
+[2.4.0]: https://github.com/ravisinghrajput95/k8s-upgrade-advisor/compare/v2.3.0...v2.4.0
 [2.3.0]: https://github.com/ravisinghrajput95/k8s-upgrade-advisor/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/ravisinghrajput95/k8s-upgrade-advisor/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/ravisinghrajput95/k8s-upgrade-advisor/compare/v2.0.0...v2.1.0

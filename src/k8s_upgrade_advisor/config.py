@@ -109,6 +109,17 @@ class ServerSettings(BaseModel):
     # return the cached report instead of re-running the pipeline — CI retry
     # storms should not multiply LLM spend. 0 disables.
     idempotency_ttl_seconds: int = Field(300, ge=0)
+    # Optional shared-secret auth. When set, every /api/v1/* request must present
+    # the key as `X-API-Key: <key>` or `Authorization: Bearer <key>`; health and
+    # /metrics stay open for probes/scrapers. Unset (the default) leaves the API
+    # open — intended for trusted-network deployments. Set via
+    # K8S_ADVISOR_SERVER__API_KEY to gate a shared/exposed instance.
+    api_key: str | None = None
+    # CORS allow-list for browsers calling the API cross-origin. Empty (default)
+    # attaches no CORS middleware, so only same-origin/non-browser clients reach
+    # it. Set to explicit origins (never "*") when a separate web frontend needs
+    # access.
+    cors_allow_origins: list[str] = Field(default_factory=list)
 
 
 class ObservabilitySettings(BaseModel):

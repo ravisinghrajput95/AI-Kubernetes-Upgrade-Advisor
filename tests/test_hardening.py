@@ -239,3 +239,24 @@ class TestStageMetrics:
         for family in metrics.registry.collect():
             if family.name == "advisor_assessments_in_flight":
                 assert family.samples[0].value == 0
+
+
+class TestFetcherSchemeGuard:
+    """Defence in depth: the doc fetcher must refuse any non-HTTPS URL even if
+    one is added to the source allow-list, and must not touch the network."""
+
+    def test_non_https_source_rejected_without_network(self, tmp_path, monkeypatch):
+        from k8s_upgrade_advisor.config import KnowledgeSettings
+        from k8s_upgrade_advisor.knowledge.fetcher import DocumentFetcher
+        from k8s_upgrade_advisor.knowledge.sources import DocSource
+
+        fetcher = DocumentFetcher(KnowledgeSettings(), tmp_path)
+
+        def _boom(*_a, **_k):
+            raise AssertionError("network call attempted for a non-HTTPS source")
+
+        monkeypatch.setattr(fetcher.session, "get", _boom)
+
+        for url in ("http://kubernetes.io/insecure", "file:///etc/passwd", "ftp://host/x"):
+            src = DocSource(key="x", title="x", url=url, kind="deprecation")
+            assert fetcher.fetch(src) is None

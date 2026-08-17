@@ -91,6 +91,15 @@ class DocumentFetcher:
             return None
 
     def fetch(self, source: DocSource, force: bool = False) -> RawDocument | None:
+        # Defence in depth: sources are a curated HTTPS allow-list (sources.py),
+        # but never fetch a plaintext/other-scheme URL even if one slips in —
+        # release-note content flows into the RAG corpus, so its transport must
+        # be authenticated and tamper-evident.
+        if not source.url.lower().startswith("https://"):
+            metrics.doc_fetches_total.labels(status="error").inc()
+            log.error("fetch_rejected_scheme", key=source.key, url=source.url)
+            return None
+
         cached = self._cached(source)
         if cached and not force and cached.age_days < self.settings.cache_max_age_days:
             metrics.doc_fetches_total.labels(status="cached").inc()

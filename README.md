@@ -129,6 +129,10 @@ Full architecture, sequence diagrams, RAG design, and decision records: [`docs/`
   a degradation note
 - **Admission controls** — idempotency cache (identical submissions return the cached
   report), token-bucket rate limiting (429), concurrency load shedding (503)
+- **Security posture** — optional shared-secret API key (`X-API-Key`/Bearer, off by
+  default for trusted networks) and CORS allow-list; non-root container (uid 10001);
+  request body-size guard; outbound doc fetches restricted to a curated HTTPS
+  allow-list. CI runs pip-audit, Trivy image scanning, and CodeQL
 - **Observability** — structured logs with request-ID correlation, Prometheus metrics
   (per-stage latency, tokens, cost, grounding ratio, KB staleness), optional OTel traces
 - **Operations contract** — [SLOs, error-budget policy, a 10k-cluster capacity model,
