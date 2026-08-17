@@ -24,7 +24,7 @@ Supports **EKS · GKE · AKS · OpenShift · Rancher (RKE2/k3s) · kubeadm · ki
 - **Honesty as a feature** — missing evidence *caps* readiness; targets beyond the
   reviewed tables trigger an explicit knowledge-horizon cap; LLM grounding is measured
   per assessment, not assumed
-- **194 offline tests in <3s** — no cluster, no network, no LLM needed
+- **203 offline tests in <3s** — no cluster, no network, no LLM needed
 - **Runs as a service** — published container + Helm chart, stateless replicas,
   rate limiting + idempotency + load shedding, shipped SLO alerts, DR runbook
 - **[Example report](examples/eks-1.26-to-1.29.md)** — see the output without running anything
@@ -91,10 +91,10 @@ The trust boundary is enforced *after* the model responds, not by prompt hope.
 
 ```bash
 k8s-upgrade-advisor serve       # http://localhost:8080 · /docs · /metrics
-helm install advisor deploy/helm/k8s-upgrade-advisor --set image.tag=v2.3.0
+helm install advisor deploy/helm/k8s-upgrade-advisor --set image.tag=v2.4.0
 ```
 
-![Web UI](docs/images/ui.png)
+![Web UI](docs/images/ui-demo.gif)
 
 ## Architecture
 
@@ -153,7 +153,7 @@ pluggable embeddings with graceful degradation.
 
 ```bash
 pip install -e ".[api,dev]"
-pytest              # 194 offline tests, <3s — no cluster/network/LLM
+pytest              # 203 offline tests, <3s — no cluster/network/LLM
 ruff check src tests
 ```
 

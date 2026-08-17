@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-08-17
+
+### Fixed
+- **Reported version was stale.** `__version__` was a hardcoded string that had
+  not been bumped since 2.2.0, so the API (`/healthz`, `/metrics`
+  `advisor_build_info`) and HTML report footer under-reported the running
+  version (2.3.0 and 2.4.0 both announced themselves as 2.2.0). It now derives
+  from the installed package metadata, making `pyproject.toml` the single source
+  of truth so it can never drift again.
+
+### Docs
+- README: added an animated web-UI demo (`docs/images/ui-demo.gif`) and
+  corrected the test count (203) and Helm image tag.
+
 ## [2.4.0] - 2026-08-17
 
 Security-hardening pass across the API surface, the supply chain, and CI.
@@ -98,7 +112,8 @@ the previously untagged deprecated-API usage evidence.
 ### Added
 - Initial release of the AI Kubernetes Upgrade Advisor.
 
-[Unreleased]: https://github.com/ravisinghrajput95/k8s-upgrade-advisor/compare/v2.4.0...HEAD
+[Unreleased]: https://github.com/ravisinghrajput95/k8s-upgrade-advisor/compare/v2.4.1...HEAD
+[2.4.1]: https://github.com/ravisinghrajput95/k8s-upgrade-advisor/compare/v2.4.0...v2.4.1
 [2.4.0]: https://github.com/ravisinghrajput95/k8s-upgrade-advisor/compare/v2.3.0...v2.4.0
 [2.3.0]: https://github.com/ravisinghrajput95/k8s-upgrade-advisor/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/ravisinghrajput95/k8s-upgrade-advisor/compare/v2.1.0...v2.2.0
