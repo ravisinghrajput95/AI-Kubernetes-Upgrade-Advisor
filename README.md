@@ -18,7 +18,7 @@ Supports **EKS · GKE · AKS · OpenShift · Rancher (RKE2/k3s) · kubeadm · ki
 - **Deterministic first, LLM second** — every compatibility fact comes from static
   lifecycle tables + cluster evidence; the LLM narrates and plans but **cannot alter
   verdicts, add blockers, or fabricate citations** (enforced in code, proven by tests)
-- **Real Kubernetes depth** — API removals 1.16→1.33 with per-hop detection, version
+- **Real Kubernetes depth** — API removals 1.16→1.36 with per-hop detection, version
   skew policy (kubelet & kube-proxy), per-provider in-tree cloud removal staging,
   admission-webhook deadlock analysis, CRD storage-version debt, Helm manifest scanning
 - **Honesty as a feature** — missing evidence *caps* readiness; targets beyond the
@@ -67,7 +67,7 @@ The trust boundary is enforced *after* the model responds, not by prompt hope.
 
 ## What it analyzes
 
-- **API lifecycle** — deprecated/removed APIs from 1.16→1.33 (static table, never guessed),
+- **API lifecycle** — deprecated/removed APIs from 1.16→1.36 (static table, never guessed),
   detected against what the cluster serves **and** what it actually requests
   (`apiserver_requested_deprecated_apis` — served ≠ used); confirmed usage escalates to blocking
 - **Version skew policy** — kubelet and kube-proxy n-2/n-3 windows per hop,
@@ -91,7 +91,7 @@ The trust boundary is enforced *after* the model responds, not by prompt hope.
 
 ```bash
 k8s-upgrade-advisor serve       # http://localhost:8080 · /docs · /metrics
-helm install advisor deploy/helm/k8s-upgrade-advisor --set image.tag=v2.2.0
+helm install advisor deploy/helm/k8s-upgrade-advisor --set image.tag=v2.3.0
 ```
 
 ![Web UI](docs/images/ui.png)
@@ -154,7 +154,8 @@ ruff check src tests
 ```
 
 Developer guide: [`docs/development.md`](docs/development.md) · API reference:
-[`docs/api.md`](docs/api.md) · RAG design: [`docs/rag.md`](docs/rag.md)
+[`docs/api.md`](docs/api.md) · RAG design: [`docs/rag.md`](docs/rag.md) · release
+history: [`CHANGELOG.md`](CHANGELOG.md)
 
 ## License
 

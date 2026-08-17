@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "k8s-upgrade-advisor"
-version = "2.2.0"
+version = "2.3.0"
 description = "AI-powered Kubernetes upgrade intelligence platform: deterministic compatibility analysis + RAG-grounded reasoning for safe cluster upgrades"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -88,7 +88,15 @@ addopts = "-q"
 markers = [
     "integration: end-to-end tests exercising CLI/API surfaces",
 ]
-filterwarnings = ["ignore::DeprecationWarning"]
+filterwarnings = [
+    # Third-party deprecation noise we don't control is ignored (lower precedence)…
+    "ignore::DeprecationWarning",
+    # …but deprecations raised from our own package are promoted to errors so a
+    # regression surfaces in CI instead of being silently swallowed.
+    "error::DeprecationWarning:k8s_upgrade_advisor",
+    # Known upstream notice we can't act on here (Starlette TestClient / httpx).
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
 
 [tool.coverage.run]
 source = ["src/k8s_upgrade_advisor"]

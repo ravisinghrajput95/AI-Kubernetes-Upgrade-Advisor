@@ -27,10 +27,14 @@ from k8s_upgrade_advisor.models import (
 
 V = KubeVersion.parse
 
+# One minor beyond whatever the current knowledge horizon is, so these tests
+# keep exercising the beyond-horizon path across future horizon bumps.
+_BEYOND_HORIZON = V(f"1.{int(KNOWLEDGE_HORIZON.split('.')[-1]) + 1}")
+
 
 class TestKnowledgeHorizon:
     def test_beyond_horizon_emits_finding(self):
-        findings = horizon_findings(V(KNOWLEDGE_HORIZON), V("1.35"))
+        findings = horizon_findings(V(KNOWLEDGE_HORIZON), _BEYOND_HORIZON)
         assert len(findings) == 1
         assert findings[0].id == HORIZON_FINDING_ID
         assert not findings[0].blocking
@@ -39,7 +43,7 @@ class TestKnowledgeHorizon:
         assert horizon_findings(V("1.28"), V(KNOWLEDGE_HORIZON)) == []
 
     def test_readiness_capped_at_70(self, eks_snapshot):
-        report = run_deterministic_analysis(eks_snapshot, V("1.33"), V("1.35"))
+        report = run_deterministic_analysis(eks_snapshot, V(KNOWLEDGE_HORIZON), _BEYOND_HORIZON)
         assert any(f.id == HORIZON_FINDING_ID for f in report.findings)
         assert report.readiness.cap <= 70
         assert "horizon" in report.readiness.cap_reason

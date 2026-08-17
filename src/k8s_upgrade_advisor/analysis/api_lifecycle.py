@@ -29,8 +29,8 @@ from ..models import (
 # "beyond knowledge horizon" finding and a readiness cap — an empty findings
 # list must never masquerade as safety. Bump BOTH constants when reviewing
 # tables for a new release (see docs/development.md release checklist).
-KNOWLEDGE_HORIZON = "1.33"
-TABLES_LAST_REVIEWED = "2026-07-18"
+KNOWLEDGE_HORIZON = "1.36"
+TABLES_LAST_REVIEWED = "2026-08-17"
 
 HORIZON_FINDING_ID = "knowledge-horizon-exceeded"
 
@@ -193,6 +193,12 @@ API_REMOVALS: tuple[APIRemoval, ...] = (
         "1.29",
         "flowcontrol.apiserver.k8s.io/v1",
     ),
+    # ── 1.33 – 1.36 ─────────────────────────────────────────────────────
+    # No GA/beta API group-versions were REMOVED in 1.33, 1.34, 1.35, or 1.36
+    # (verified against the upstream deprecation guide on 2026-08-17). The
+    # notable lifecycle events in this window are *deprecations* and behaviour
+    # changes, tracked in BEHAVIOR_CHANGES below — not group-version removals.
+    # An empty tail here is reviewed-and-clear, not unexamined.
 )
 
 
@@ -378,6 +384,114 @@ BEHAVIOR_CHANGES: tuple[BehaviorChange, ...] = (
             "and node images should be on cgroup v2."
         ),
         remediation="Verify node OS images use cgroup v2 (systemd unified hierarchy).",
+    ),
+    # ── 1.33 ────────────────────────────────────────────────────────────
+    BehaviorChange(
+        id="endpoints-api-deprecated",
+        title="Endpoints API deprecated in favour of EndpointSlices",
+        effective_in="1.33",
+        severity=Severity.INFO,
+        description=(
+            "From 1.33 the core v1 Endpoints API is formally deprecated: the "
+            "apiserver emits deprecation warnings when clients read or write "
+            "Endpoints. The type is not scheduled for removal, but scripts, "
+            "controllers, and integrations reading Endpoints directly should move "
+            "to EndpointSlices (stable since 1.21, and the only API with dual-stack "
+            "and topology data)."
+        ),
+        remediation=(
+            "Migrate controllers/scripts that consume Endpoints to the "
+            "discovery.k8s.io/v1 EndpointSlices API."
+        ),
+    ),
+    # ── 1.35 ────────────────────────────────────────────────────────────
+    BehaviorChange(
+        id="cgroup-v1-disabled-by-default",
+        title="cgroup v1 disabled by default — kubelet fails to start on cgroup v1 nodes",
+        effective_in="1.35",
+        severity=Severity.CRITICAL,
+        description=(
+            "From 1.35 the kubelet's failCgroupV1 setting defaults to true: this is "
+            "a hard failure, not a warning. A kubelet on a node still running the "
+            "cgroup v1 hierarchy refuses to initialise, so the node never becomes "
+            "Ready after the upgrade. The failCgroupV1=false escape hatch exists but "
+            "defers the inevitable and blocks cgroup-v2-only features."
+        ),
+        remediation=(
+            "Confirm every node OS image boots with the cgroup v2 unified hierarchy "
+            "(stat -fc %T /sys/fs/cgroup == cgroup2fs) before upgrading past 1.34; "
+            "rebuild/replace node pools still on cgroup v1."
+        ),
+        kep="KEP-5573",
+    ),
+    BehaviorChange(
+        id="ipvs-proxy-mode-deprecated",
+        title="kube-proxy IPVS mode deprecated",
+        effective_in="1.35",
+        severity=Severity.LOW,
+        description=(
+            "From 1.35 the kube-proxy IPVS mode is formally deprecated, with nftables "
+            "mode positioned as the long-term replacement. IPVS keeps working for now "
+            "but removal is targeted for a later release (~1.38), so clusters pinning "
+            "--proxy-mode=ipvs should plan a migration."
+        ),
+        remediation=(
+            "Plan migration of kube-proxy from IPVS to the nftables (or iptables) mode "
+            "ahead of its removal; validate Service/NetworkPolicy behaviour on nftables."
+        ),
+        kep="KEP-5495",
+    ),
+    BehaviorChange(
+        id="streaming-authz-create-verb",
+        title="exec/attach/port-forward now require the 'create' verb",
+        effective_in="1.35",
+        severity=Severity.MEDIUM,
+        description=(
+            "From 1.35 WebSocket streaming requests (kubectl exec, attach, "
+            "port-forward) are authorised against the 'create' verb on the pod "
+            "subresource rather than 'get'. RBAC roles that granted only 'get' on "
+            "pods/exec, pods/attach, or pods/portforward stop permitting those "
+            "actions after the upgrade."
+        ),
+        remediation=(
+            "Audit Roles/ClusterRoles granting pods/exec, pods/attach, or "
+            "pods/portforward and ensure they include the 'create' verb."
+        ),
+    ),
+    # ── 1.36 ────────────────────────────────────────────────────────────
+    BehaviorChange(
+        id="containerd-1x-removed",
+        title="containerd 1.x support removed — nodes need containerd 2.x",
+        effective_in="1.36",
+        severity=Severity.HIGH,
+        description=(
+            "1.35 is the last release supporting containerd 1.x; from 1.36 the "
+            "kubelet requires containerd 2.x (or another CRI 2.x runtime). Nodes "
+            "still on containerd 1.x must be upgraded, and containerd 2.0 drops the "
+            "deprecated registry.configs / registry.auths config structures, so "
+            "runtime config may need rewriting."
+        ),
+        remediation=(
+            "Upgrade node containerd to 2.x before crossing 1.36 and migrate any "
+            "registry.configs/registry.auths settings to the 2.0 config format."
+        ),
+        kep="KEP-4033",
+    ),
+    BehaviorChange(
+        id="service-externalips-deprecated",
+        title="Service .spec.externalIPs deprecated",
+        effective_in="1.36",
+        severity=Severity.LOW,
+        description=(
+            "From 1.36 Service .spec.externalIPs is deprecated: the apiserver warns on "
+            "its use. The field is a long-standing man-in-the-middle risk (CVE-2020-8554) "
+            "and is slated for removal in a future release."
+        ),
+        remediation=(
+            "Move Services off .spec.externalIPs to LoadBalancer/NodePort or an ingress "
+            "controller; where it must stay, gate it with the DenyServiceExternalIPs "
+            "admission controller."
+        ),
     ),
 )
 
