@@ -27,7 +27,8 @@ Supports **EKS · GKE · AKS · OpenShift · Rancher (RKE2/k3s) · kubeadm · ki
 - **203 offline tests in <3s** — no cluster, no network, no LLM needed
 - **Runs as a service** — published container + Helm chart, stateless replicas,
   rate limiting + idempotency + load shedding, shipped SLO alerts, DR runbook
-- **[Example report](examples/eks-1.26-to-1.29.md)** — see the output without running anything
+- **Example reports** — [kind 1.32→1.36 with AI narrative + `[DOC n]` citations](examples/kind-1.32-to-1.36-ai.md)
+  · [GKE 1.35→1.36, real managed cluster](examples/gke-1.35-to-1.36.md) — see the output without running anything
 
 ## Try it in 30 seconds
 

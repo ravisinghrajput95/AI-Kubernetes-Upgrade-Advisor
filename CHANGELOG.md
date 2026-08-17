@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.2] - 2026-08-17
+
+### Fixed
+- Repointed the dead `prometheus-operator` compatibility doc URL (moved upstream
+  to `Documentation/getting-started/compatibility.md`; the old path 404s). The
+  full source allow-list was swept — this was the only genuinely dead URL.
+
+### Docs
+- Replaced the older `eks-1.26-to-1.29` example with two current,
+  cluster-validated reports: a grounded gpt-4o run on **kind 1.32→1.36** (AI
+  narrative + `[DOC n]` citations, 33% grounding) and a real **GKE 1.35→1.36**
+  managed-cluster report.
+
 ## [2.4.1] - 2026-08-17
 
 ### Fixed
@@ -112,7 +125,8 @@ the previously untagged deprecated-API usage evidence.
 ### Added
 - Initial release of the AI Kubernetes Upgrade Advisor.
 
-[Unreleased]: https://github.com/ravisinghrajput95/k8s-upgrade-advisor/compare/v2.4.1...HEAD
+[Unreleased]: https://github.com/ravisinghrajput95/k8s-upgrade-advisor/compare/v2.4.2...HEAD
+[2.4.2]: https://github.com/ravisinghrajput95/k8s-upgrade-advisor/compare/v2.4.1...v2.4.2
 [2.4.1]: https://github.com/ravisinghrajput95/k8s-upgrade-advisor/compare/v2.4.0...v2.4.1
 [2.4.0]: https://github.com/ravisinghrajput95/k8s-upgrade-advisor/compare/v2.3.0...v2.4.0
 [2.3.0]: https://github.com/ravisinghrajput95/k8s-upgrade-advisor/compare/v2.2.0...v2.3.0

@@ -201,7 +201,7 @@ _COMPONENTS: tuple[DocSource, ...] = (
     DocSource(
         "prometheus-operator-compat",
         "Prometheus Operator compatibility",
-        "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/Documentation/compatibility.md",
+        "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/Documentation/getting-started/compatibility.md",
         "component-docs",
         "prometheus-operator",
     ),
